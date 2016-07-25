@@ -1,69 +1,71 @@
 <tool id="irods_pull" name="Load files from iRODS" version="0.1">
-  <description>Load your files from iRODS into your Galaxy history</description>
-  <requirements>
-    <requirement type="package" version="0.5.0">pythonirodsclient</requirement>
-  </requirements>
+	<description>Load your files from iRODS into your Galaxy history</description>
+	<requirements>
+		<requirement type="package" version="0.5.0">pythonirodsclient</requirement>
+	</requirements>
 
-  <command interpreter="python">
-    ##------------------------------------------------------------------------------------
-    ## Main body of the tool
-    ##------------------------------------------------------------------------------------
-    ## First we process the current history and get a table with the metadata for each job
-    #set global $history = $output.creating_job.history
+	<command interpreter="python">
+		##------------------------------------------------------------------------------------
+		## Main body of the tool
+		##------------------------------------------------------------------------------------
+		## First we process the current history and get a table with the metadata for each job
+		#set global $history = $output.creating_job.history
 
-    ## Set the params for the next Python script
-    #set params=[]
-    ##1. File to upload
-    #set aux = $filePath
-    $params.append(str($aux))
-    ##2. Custom name
-    #set aux = $customName
-    $params.append(str($aux))
-    ##3. The history ID
-    $params.append($__app__.security.encode_id($output.history.id))
-    ##4. Current Galaxy user
-    $params.append(str($__user_name__))
+		## Set the params for the next Python script
+		#set params={}
+		##1. File to upload
+		#set params["file_path"] = str($filePath)
+		##2. Custom name
+		#set params["custom_name"] = str($customName)
+		##3. Current Galaxy user
+		#set params["user_name"] = str($__user_name__)
 
-    #if $user_option.typeUser=="use_custom_user"
-    ##5. Custom user
-    #set aux = $user_option.custom_user
-    $params.append(str($aux))
-    ##6. Custom pass
-    #set aux = $user_option.custom_pass
-    $params.append(str($aux))
-    #end if
+		#if $user_option.typeUser=="use_custom_user"
+		##4. Custom user
+		#set params["custom_user"] = str($user_option.custom_user)
+		##6. Custom pass
+		#set params["custom_pass"] = str($user_option.custom_pass)
+		#end if
 
-    ##Execute the main tool script
-    irods_pull.py "${params}"
-  </command>
+		##7. Galaxy params
+		#set params["GALAXY_ROOT_DIR"] = str($GALAXY_ROOT_DIR)
+		#set params["GALAXY_DATATYPES_CONF_FILE"] = str($GALAXY_DATATYPES_CONF_FILE)
+		#set params["job_id"] = str($output.creating_job.id)
 
-  <inputs>
-    <param name="filePath" type="text" value="" label="File to load (click here to select):" />
-    <param name="customName" type="text" value="" label="Name for file in Galaxy:" />
-    <conditional name="user_option">
-      <param type="select" display="radio" name="typeUser" label="Credentials for iRODS [see help for more information]: ">
-        <option value="use_galaxy_user">Use my Galaxy username for iRODS.</option>
-        <option value="use_custom_user">Use custom credentials.</option>
-      </param>
-      <when value="use_custom_user">
-        <param name="custom_user" type="text" value="" label="iRODS username:" />
-        <param name="custom_pass" type="text" value="" label="iRODS password:" />
-      </when>
-    </conditional>
-  </inputs>
+		#import json
+		#set $params=json.dumps($params)
 
-  <outputs>
-    <data format="txt" name="output" metadata_source="selectedFiles"/>
-  </outputs>
+		##Execute the main tool script
+		irods_pull.py '$params'
+	</command>
 
-  <help>
-    Use this tool to load any number of files from your iRODS filesystem into the current Galaxy history.
-    First choose the files in iRODS, set a custom name for the file in Galaxy (optional) and click on "Execute".
+	<inputs>
+		<param name="filePath" type="text" value="" label="File to load (click here to select):" />
+		<param name="customName" type="text" value="" label="Name for file in Galaxy:" />
+		<conditional name="user_option">
+			<param type="select" display="radio" name="typeUser" label="Credentials for iRODS [see help for more information]: ">
+				<option value="use_galaxy_user">Use my Galaxy username for iRODS.</option>
+				<option value="use_custom_user">Use custom credentials.</option>
+			</param>
+			<when value="use_custom_user">
+				<param name="custom_user" type="text" value="" label="iRODS username:" />
+				<param name="custom_pass" type="text" value="" label="iRODS password:" />
+			</when>
+		</conditional>
+	</inputs>
 
-    Author: Rafael Hernández de Diego, SLU Global Bioinformatics Centre,
-    https://github.com/fikipollo
+	<outputs>
+		<data format="txt" name="output" metadata_source="selectedFiles"/>
+	</outputs>
 
-    Author: Partially based on the work of Katherine Beaulieu, AAFC-MBB
-    https://github.com/AAFC-MBB/Galaxy/tree/dev/wrappers/irods_push
-  </help>
+	<help>
+		Use this tool to load any number of files from your iRODS filesystem into the current Galaxy history.
+		First choose the files in iRODS, set a custom name for the file in Galaxy (optional) and click on "Execute".
+
+		Author: Rafael Hernández de Diego, SLU Global Bioinformatics Centre,
+		https://github.com/fikipollo
+
+		Author: Partially based on the work of Katherine Beaulieu, AAFC-MBB
+		https://github.com/AAFC-MBB/Galaxy/tree/dev/wrappers/irods_push
+	</help>
 </tool>

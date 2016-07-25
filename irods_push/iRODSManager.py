@@ -24,10 +24,10 @@
    SOFTWARE.
 
    Contributors:
-        Rafael Hernandez de Diego <rafahdediego@gmail.com>
-        Tomas Klingström
-        Erik Bongcam-Rudloff
-        and others.
+      Rafael Hernandez de Diego <rafahdediego@gmail.com>
+      Tomas Klingstrom
+      Erik Bongcam-Rudloff
+      and others.
 '''
 
 import sys
@@ -142,9 +142,9 @@ class IRODSManager:
 
 		@returns Integer valid, where
 		             -1 destination does not exists
-					  1 destination not RW for current user
-					  0 valid destination
-					  2 valid destination, existing file with same filename
+		              1 destination not RW for current user
+		              0 valid destination
+		              2 valid destination, existing file with same filename
 		"""
 		# Step 1. Check if destination dir exists
 		destination_dir = destination_dir.rstrip("/")
@@ -180,10 +180,10 @@ class IRODSManager:
 		# Step 1. Remove the file if exists
 		path = os.path.join(destination_dir, file_name)
 		try:
-		    self.session.data_objects.get(path)
-		    self.session.data_objects.unlink(path)
+			self.session.data_objects.get(path)
+			self.session.data_objects.unlink(path)
 		except DataObjectDoesNotExist:
-		    pass
+			pass
 
 		# Step 2. Create the new file
 		print "Saving file as " + path
@@ -192,19 +192,19 @@ class IRODSManager:
 
 		# Step 3. Copy the content of the file
 		with open(origin_file) as input:
-		    with obj.open('w') as output:
-		        for line in input:
-		            output.write(line)
+			with obj.open('w') as output:
+				for line in input:
+					output.write(line)
 		input.close()
 		output.close()
 
 		# Step 4. Verify content
 		local_hash = hashlib.sha256()
 		with open(origin_file) as input:
-		    local_hash.update(input.read())
+			local_hash.update(input.read())
 		remote_hash = hashlib.sha256()
 		with obj.open('r') as input:
-		    remote_hash.update(input.read())
+			remote_hash.update(input.read())
 
 		if local_hash.hexdigest() != remote_hash.hexdigest():
 			raise Exception("Verification problem: local file hash does not match remote hash. Maybe the file was not copied correctly." )
@@ -228,11 +228,12 @@ class IRODSManager:
 
 		return True
 
-	def pullFile(self, file_path, custom_name, history_id, user_name):
+	def pullFile(self, file_path, custom_name, user_name, galaxy_params):
 		#Step 1. Check if the origin directory exists and is valid for current user
 		file_path = file_path.split("/")
 		if len(file_path) < 2:
 			raise CollectionDoesNotExist("File path is not valid. The path " + "/".join(file_path) + " was not found in iRODS." )
+
 		fileName = file_path[-1]
 		file_path = "/".join(file_path[0:len(file_path)-1]) + "/"
 
@@ -243,5 +244,50 @@ class IRODSManager:
 			raise CollectionDoesNotExist("File path not valid. The directory " + file_path + " in iRODS is not readable for current user." )
 		if valid == 0:
 			raise CollectionDoesNotExist("Unable to find the file '" + file_name + "' in directory " + file_path + " in iRODS.")
-		if valid == 2:
-			return True;
+		if valid != 2:
+			raise CollectionDoesNotExist("Unable to find the file '" + file_name + "' in directory " + file_path + " in iRODS.")
+
+		#Step 2. Copy the file content to a temporal file
+		obj = self.session.data_objects.get(file_path  + fileName)
+		with obj.open('r+') as input:
+				with open(custom_name,"w") as output:
+						output.write(input.read()) #TODO: write to a temporal file?
+		output.close()
+		input.close()
+
+		import os
+
+		file_content = {
+			"uuid": None,
+			"file_type": "auto",
+			"space_to_tab": False,
+			"dbkey": "?",
+			"to_posix_lines": True,
+			"ext": "txt", #TODO: GET FROM METADATA
+			"path": os.path.abspath(output.name),
+			"in_place": True,
+			"dataset_id": galaxy_params["job_id"],
+			"type": "file",
+			"is_binary": False, #TODO: GET FROM METADATA
+			"link_data_only": "copy_files",
+			"name": custom_name
+		}
+
+		with open("temporal.json","w") as output:
+			output.write(json.dumps(file_content))
+		output.close()
+
+		#Step 3. Call to Galaxy's upload tool
+		command = "python " + galaxy_params["GALAXY_ROOT_DIR"]\
+		+ "/tools/data_source/upload.py"\
+		+ " " + galaxy_params["GALAXY_ROOT_DIR"]\
+		+ " " + galaxy_params["GALAXY_DATATYPES_CONF_FILE"]\
+		+ " " + os.path.abspath(output.name)\
+		+ " " + galaxy_params["job_id"] + ":/usr/local/galaxy/database/jobs_directory/000/" + galaxy_params["job_id"] + "/dataset_" + galaxy_params["job_id"] + "_files:/usr/local/galaxy/database/files/000/dataset_" + galaxy_params["job_id"] + ".dat"
+
+		print command
+		os.system(command)
+
+		#from time import sleep
+		#sleep 5
+		return True
