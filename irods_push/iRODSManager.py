@@ -75,11 +75,10 @@ class IRODSManager:
 				first_line = f.readline().strip()
 			self.passwd = decode(first_line)
 
-			#TODO OPEN SESSION USING THE CLIENT USER TO KEEP CONTROL ON DATA ACCESS
 			if(passwd == None):
 				#Use default user and password but custom client username and zone
-				self.session = iRODSSession(host=self.host, port=self.port, user=self.user, password=self.passwd, zone=self.zone)
-				#self.session = iRODSSession(self.host, port=self.port, user=self.user, password=self.passwd, zone=self.zone, client_user=client_user, client_zone=client_zone)
+				#TODO CUSTOM CLIENT DIR?
+				self.session = iRODSSession(self.host, port=self.port, user=self.user, password=self.passwd, zone=self.zone, client_user=user_name)#, client_zone=client_zone)
 			else:
 				#Use custom user and password
 				#TODO: ZONE?
@@ -131,100 +130,6 @@ class IRODSManager:
 
 		#Step 5. Set the metadata for the file
 		self.setFileMetadata(destination_dir, file_name, metadata)
-
-		return True
-
-	def checkDestinationPermissions(self, destination_dir, user_name, file_name):
-		"""This function checks if the destination directory exits and, if so,
-		if the current user can write at that directory. Finally the function
-		checks if the destination dir already contents a file with the given
-		filename
-
-		@returns Integer valid, where
-		             -1 destination does not exists
-		              1 destination not RW for current user
-		              0 valid destination
-		              2 valid destination, existing file with same filename
-		"""
-		# Step 1. Check if destination dir exists
-		destination_dir = destination_dir.rstrip("/")
-
-		try:
-			self.session.collections.get(destination_dir)
-		except Exception as e:
-			return -1
-
-		# Step 2. Check if destination dir is R/W for current user
-		#TODO: CHECK PERMISSIONS FOR USER
-
-		# Step 3. Check if destination contains a file with same filename
-		try:
-			self.session.data_objects.get(destination_dir + "/" + file_name)
-		except Exception as e:
-			pass #does not exists
-		else:
-			return 2
-
-		return 0
-
-	def copyFileToIRODS(self, destination_dir, origin_file, file_name, metadata):
-		"""This function copies a local file to the remote destination directory.
-		First the function removes the remote file if already exists. To avoid
-		overwriting files, in previous steps the filename should be changed to a
-		non-existing remote filename.
-		Then the file is copied to the remote server and a validation step is run
-		in order to check if the file has been copied succesfully.
-		"""
-		print "Copying file " + origin_file + " as " + file_name
-
-		# Step 1. Remove the file if exists
-		path = os.path.join(destination_dir, file_name)
-		try:
-			self.session.data_objects.get(path)
-			self.session.data_objects.unlink(path)
-		except DataObjectDoesNotExist:
-			pass
-
-		# Step 2. Create the new file
-		print "Saving file as " + path
-
-		obj = self.session.data_objects.create(path)
-
-		# Step 3. Copy the content of the file
-		with open(origin_file) as input:
-			with obj.open('w') as output:
-				for line in input:
-					output.write(line)
-		input.close()
-		output.close()
-
-		# Step 4. Verify content
-		local_hash = hashlib.sha256()
-		with open(origin_file) as input:
-			local_hash.update(input.read())
-		remote_hash = hashlib.sha256()
-		with obj.open('r') as input:
-			remote_hash.update(input.read())
-
-		if local_hash.hexdigest() != remote_hash.hexdigest():
-			raise Exception("Verification problem: local file hash does not match remote hash. Maybe the file was not copied correctly." )
-
-		return True
-
-	def setFileMetadata(self, destination_dir, file_name, metadata):
-		"""This function sets the metadata for a given file"""
-		# Step 1. Check if file exists
-		path = os.path.join(destination_dir, file_name)
-		obj = self.session.data_objects.get(path)
-		if obj == None:
-			raise DataObjectDoesNotExist("The object " + path + " was not found at iRODS server." )
-
-		# Step 2. Clear previous metadata
-		obj.metadata.remove_all()
-
-		# Step 3. Set metadata
-		for key, value in metadata.iteritems():
-			obj.metadata.add(key, value)
 
 		return True
 
@@ -290,4 +195,101 @@ class IRODSManager:
 
 		#from time import sleep
 		#sleep 5
+		return True
+
+	def checkDestinationPermissions(self, destination_dir, user_name, file_name):
+		"""This function checks if the destination directory exits and, if so,
+		if the current user can write at that directory. Finally the function
+		checks if the destination dir already contents a file with the given
+		filename
+
+		@returns Integer valid, where
+		             -1 destination does not exists
+		              1 destination not RW for current user
+		              0 valid destination
+		              2 valid destination, existing file with same filename
+		"""
+		# Step 1. Check if destination dir exists
+		destination_dir = destination_dir.rstrip("/")
+
+		try:
+			self.session.collections.get(destination_dir)
+		except Exception as e:
+			return -1
+
+		# Step 2. Check if destination dir is R/W for current user
+		#TODO: CHECK PERMISSIONS FOR USER
+		#return 1
+
+		# Step 3. Check if destination contains a file with same filename
+		try:
+			self.session.data_objects.get(destination_dir + "/" + file_name)
+		except Exception as e:
+			pass #does not exists
+		else:
+			return 2
+
+		return 0
+
+	def copyFileToIRODS(self, destination_dir, origin_file, file_name, metadata):
+		"""This function copies a local file to the remote destination directory.
+		First the function removes the remote file if already exists. To avoid
+		overwriting files, in previous steps the filename should be changed to a
+		non-existing remote filename.
+		Then the file is copied to the remote server and a validation step is run
+		in order to check if the file has been copied succesfully.
+		"""
+		print "Copying file " + origin_file + " as " + file_name
+
+		# Step 1. Remove the file if exists
+		path = os.path.join(destination_dir, file_name)
+		try:
+			self.session.data_objects.get(path)
+			self.session.data_objects.unlink(path)
+		except DataObjectDoesNotExist:
+			pass
+
+		# Step 2. Create the new file
+		print "Saving file as " + path
+
+		obj = self.session.data_objects.create(path)
+
+		# Step 3. Copy the content of the file
+		with open(origin_file) as input:
+			with obj.open('w') as output:
+				for line in input:
+					output.write(line)
+		input.close()
+		output.close()
+
+		# Step 4. Verify content
+		local_hash = hashlib.sha256()
+		with open(origin_file) as input:
+			local_hash.update(input.read())
+		remote_hash = hashlib.sha256()
+		with obj.open('r') as input:
+			remote_hash.update(input.read())
+
+		if local_hash.hexdigest() != remote_hash.hexdigest():
+			raise IOError("Verification problem: local file hash does not match remote hash. Maybe the file was not copied correctly." )
+
+		return True
+
+	def setFileMetadata(self, destination_dir, file_name, metadata):
+		"""This function sets the metadata for a given file"""
+		# Step 1. Check if file exists
+		path = os.path.join(destination_dir, file_name)
+		obj = self.session.data_objects.get(path)
+		if obj == None:
+			raise DataObjectDoesNotExist("The object " + path + " was not found at iRODS server." )
+
+		# Step 2. Clear previous metadata
+		obj.metadata.remove_all()
+
+		print "Setting metadata to file: " + str(metadata)
+
+		# Step 3. Set metadata
+		for key, value in metadata.iteritems():
+			obj.metadata.add(key, value)
+
 		return True

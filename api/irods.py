@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 '''
    The MIT License (MIT)
 
@@ -25,15 +24,12 @@
 
    Contributors:
         Rafael Hernandez de Diego <rafahdediego@gmail.com>
-        Tomas Klingström
+        Tomas Klingstrom
         Erik Bongcam-Rudloff
         and others.
-'''
 
-"""
 API operations for iRODS
-"""
-
+'''
 from __future__ import absolute_import
 
 import logging
@@ -65,9 +61,9 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 		super( IRODSAPIController, self ).__init__( app )
 
 	@expose_api
-	def index(self, trans, **kwd):
+	def index(self, trans, payload, **kwd):
 		"""
-		GET /api/external/irods
+		POST /api/external/irods
 
 		Displays a collection of files for the user
 
@@ -91,30 +87,51 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 		passwd = decode(first_line)
 
 		#READ client_user FROM REQUEST
-		client_user = util.string_as_bool( kwd.get( 'username', '' ) )
-		client_zone="/b3devZone"
-		client_id = util.string_as_bool( kwd.get( 'id', '' ) )
-		#TODO: CHECK IF username is valid for current API KEY
+		try:
+			client_user = payload[ 'username' ]
+			passwd = payload[ 'password' ]
+			sess = iRODSSession(host=host, port=port, user=client_user, password=passwd, zone=zone)
+		except Exception as e:
+			client_user = trans.user.username #READ username FROM GALAXY SESSION
+			sess = iRODSSession(host=host, port=port, user=user, password=passwd, zone=zone, client_user=client_user) #, client_zone=client_zone)
 
-		#sess = iRODSSession(host=host, port=port, user=user, password=passwd, zone=zone, client_user=client_user, client_zone=client_zone)
-		sess = iRODSSession(host=host, port=port, user=user, password=passwd, zone=zone)
+		show_files = False
+		if "show_files" in payload:
+			show_files = payload[ 'show_files' ]
 
-		show_files = util.string_as_bool( kwd.get( 'show_files', 'False' ) )
-		coll = sess.collections.get(client_zone)
-		results = self.getCollectionAsTree(coll, show_files)
-
-		sess.cleanup()
-		del sess
+		#GET THE CONTENTS
+		#TODO: use custom directory client_zone (form)
+		#TODO: GET ALL THE R/W DIRECTORIES FOR CURRENT USER?
+		
+		root = "/" + zone + "/home/"
+		results = ""
+		try:
+			coll = sess.collections.get(root + client_user)
+			results = self.getCollectionAsTree(coll, show_files, root)
+		except Exception as e:
+			pass
+		finally:
+			#CLOSE SESSION
+			sess.cleanup()
+			del sess
 
 		return [results]
 
-	def getCollectionAsTree(self, coll, show_files):
+	def getCollectionAsTree(self, coll, show_files, root=None):
 		tree={"name" : coll.name, "children": [], "type": "dir"}
 		for col in coll.subcollections:
 			tree["children"].append(self.getCollectionAsTree(col, show_files))
 		if show_files:
 			for obj in coll.data_objects:
 				tree["children"].append({"name" : obj.name, "type": "file"})
+
+		if root != None:
+			root = root.rstrip("/").split("/")
+			root.reverse()
+			for _dir in root:
+				_dir = (_dir or "/")
+				tree={"name" : _dir, "children": [tree], "type": "dir"}
+
 		return tree
 
 

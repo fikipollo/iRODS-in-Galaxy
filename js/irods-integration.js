@@ -28,151 +28,142 @@
 *       and others.
 */
 $(window).load(function() {
-  observeDOM( document.getElementById('center-panel') ,function(){
-    //Set the event only the first time that the panel is shown
-    if($("div[tour_id=destinationDir]").length > 0 || $("div[tour_id=filePath]").length > 0){
-      var elem = $("div[tour_id=destinationDir]");
-      if (elem.length === 0){
-        elem = $("div[tour_id=filePath]");
-      }
+	observeDOM( document.getElementById('center-panel') ,function(){
+		//Set the event only the first time that the panel is shown
+		if($("div[tour_id=destinationDir]").length > 0 || $("div[tour_id=filePath]").length > 0){
+			var elem = $("div[tour_id=destinationDir]");
+			if (elem.length === 0){
+				elem = $("div[tour_id=filePath]");
+			}
 
-      if(elem.data('events') !== undefined && elem.data('events').click !== undefined){
-        return;
-      }
+			if(elem.data('events') !== undefined && elem.data('events').click !== undefined){
+				return;
+			}
 
-      console.log("iRODS integration: adding new events");
+			console.log("iRODS integration: adding new events");
 
-      $('input[value="use_custom_user"]').on("change", function(){
-        var elem = $('div[tour_id="user_option|custom_pass"]').find("input");
-        if(elem.data('events')["input"].length < 2){//already assigned, ignore
-          console.log("iRODS integration: new event assigned to custom password field");
-          //Change the type for the password field to "password"
-          elem.on("input", function(){
-            $(this).attr("type", "password")
-          });
-        }
-      });
+			$('input[value="use_custom_user"]').on("change", function(){
+				var elem = $('div[tour_id="user_option|custom_pass"]').find("input");
+				if(elem.data('events')["input"].length < 2){//already assigned, ignore
+					console.log("iRODS integration: new event assigned to custom password field");
+					//Change the type for the password field to "password"
+					elem.on("input", function(){
+						$(this).attr("type", "password")
+					});
+				}
+			});
 
-      console.log("iRODS integration: new events assigned to file selector field");
-      elem.click(function() {
-        if($('#irods-selector-dialog').length === 0){
-          //Inject the HTML elem for the folder selection.
-          var selectorHTML =
-          '  <div class="modal" id="irods-selector-dialog" role="dialog">' +
-          '    <div class="modal-dialog">' +
-          '      <div class="modal-content">' +
-          '        <div class="modal-header">' +
-          '          <h4 class="modal-title">Please, choose the location in iRODS</h4>' +
-          '        </div>' +
-          '        <div class="modal-body">' +
-          '          <b id="irods-selector-message" class=".text-info">Loading the iRODS content...</b>' +
-          '          <div id="irods-selector-tree"></div>' +
-          '        </div>' +
-          '        <div class="modal-footer">' +
-          '          <button type="button" id="irods-selector-ok-button" class="btn btn-info" data-dismiss="modal">Use selection</button>' +
-          '          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>' +
-          '        </div>' +
-          '      </div>' +
-          '    </div>' +
-          '  </div>';
-          $("body").append(selectorHTML);
-          //Set the event handler for the "Accept" button in the dialog
-          $("#irods-selector-ok-button").click(function(){
-            //Get the absolute path for the selection in the tree
-            var elem = $("div[tour_id=destinationDir]");
-            if (elem.length === 0){
-              elem = $("div[tour_id=filePath]");
-            }
-            //TODO: detect if in pull the selection is a folder -> invalid
-            var path = "";
-            var tree = $('#irods-selector-tree').treeview(true);
-            if(tree.getSelected().length > 0){
-              var node = tree.getSelected()[0];
-              path = "/" + node.text;
+			console.log("iRODS integration: new events assigned to file selector field");
+			elem.click(function() {
+				if($('#irods-selector-dialog').length === 0){
+					//Inject the HTML elem for the folder selection.
+					var selectorHTML =
+					'  <div class="modal" id="irods-selector-dialog" role="dialog">' +
+					'    <div class="modal-dialog">' +
+					'      <div class="modal-content">' +
+					'        <div class="modal-header">' +
+					'          <h4 class="modal-title">Please, choose the location in iRODS</h4>' +
+					'        </div>' +
+					'        <div class="modal-body">' +
+					'          <b id="irods-selector-message" class=".text-info">Loading the iRODS content...</b>' +
+					'          <div id="irods-selector-tree"></div>' +
+					'        </div>' +
+					'        <div class="modal-footer">' +
+					'          <button type="button" id="irods-selector-ok-button" class="btn btn-info" data-dismiss="modal">Use selection</button>' +
+					'          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>' +
+					'        </div>' +
+					'      </div>' +
+					'    </div>' +
+					'  </div>';
+					$("body").append(selectorHTML);
+					//Set the event handler for the "Accept" button in the dialog
+					$("#irods-selector-ok-button").click(function(){
+						//Get the absolute path for the selection in the tree
+						var elem = $("div[tour_id=destinationDir]");
+						if (elem.length === 0){
+							elem = $("div[tour_id=filePath]");
+						}
+						//TODO: detect if in pull the selection is a folder -> invalid
+						var path = "";
+						var tree = $('#irods-selector-tree').treeview(true);
+						if(tree.getSelected().length > 0){
+							var node = tree.getSelected()[0];
+							path = node.text;
 
-              while(node.parentId !== undefined){
-                node = tree.getNode(node.parentId)
-                path = "/" + node.text + path;
-              }
-            }
+							while(node.parentId !== undefined){
+								node = tree.getNode(node.parentId)
+								path = node.text + "/" + path;
+							}
+						}
+						path = path.replace(/\/\//g, "/");
 
-            //Set the absolute path to the input field and notify Galaxy the changes
-            elem.find("input").val(path).trigger("input");
+						//Set the absolute path to the input field and notify Galaxy the changes
+						elem.find("input").val(path).trigger("input");
 
-            elem = $("div[tour_id='customName']");
-            if(elem.length > 0){
-              var fileName = path.split("/");
-              fileName=fileName[fileName.length -1];
-              elem.find("input").val(fileName).trigger("input");;
-            }
+						elem = $("div[tour_id='customName']");
+						if(elem.length > 0){
+							var fileName = path.split("/");
+							fileName=fileName[fileName.length -1];
+							elem.find("input").val(fileName).trigger("input");;
+						}
 
-          });
+					});
 
-          $( "#irods-selector-dialog" ).on('show.bs.modal', function (e) {
-            $.ajax({
-              url: "api/users/current",
-              success: function(data, status){
-                var username = data.username;
-                var id = data.id;
-                var adaptData = function(data){
-                  if(data.type === "dir"){
-                    for(var i in data.children){
-                      adaptData(data.children[i]);
-                    }
-                    data.icon = "fa fa-folder-o";
-                  }else if(data.type === "file"){
-                    data.icon = "fa fa-file-o";
-                  }
+					$( "#irods-selector-dialog" ).on('show.bs.modal', function (e) {
+						var adaptData = function(data){
+							if(data.type === "dir"){
+								for(var i in data.children){
+									adaptData(data.children[i]);
+								}
+								data.icon = "fa fa-folder-o";
+							}else if(data.type === "file"){
+								data.icon = "fa fa-file-o";
+							}
 
-                  data.text = data.name;
-                  data.nodes = data.children;
-                  delete data.name;
-                  delete data.children;
-                  delete data.type;
-                }
+							data.text = data.name;
+							data.nodes = data.children;
+							delete data.name;
+							delete data.children;
+							delete data.type;
+						}
 
-                var elem = $("div[tour_id=destinationDir]");
-                var type = "push";
-                if (elem.length === 0){
-                  elem = $("div[tour_id=filePath]");
-                  type = "pull";
-                }
+						var elem = $("div[tour_id=destinationDir]");
+						var type = "push";
+						if (elem.length === 0){
+							elem = $("div[tour_id=filePath]");
+							type = "pull";
+						}
+						//TODO: CUSTOM USER AND PASS
+						$.ajax({
+							url: "api/external/irods",
+							method: "POST",
+							data: {
+								// username: username,
+								// id: id,
+								show_files: ((type === "push")?false:true)
+							},
+							success: function(data, status){
+								adaptData(data[0]);
+								var message = "Choose the directory where the files will be stored.";
+								if(type === "pull"){
+									message = "Choose the file to upload to current Galaxy history.";
+								}
+								$('#irods-selector-message').text(message).removeClass("text-info");
+								$('#irods-selector-tree').treeview({data: data});
+							},
+							error:function(){
+								$('#irods-selector-message').text("Unable to connect to iRODS. Please contact your system administrator.").removeClass("text-info").addClass("text-danger");
+								console.error("Error in iRODS selector dialog: unable to retrieve the files list. Is iRODS running on your server?");
+							}
+						});
+					})
+				}
 
-                $.ajax({
-                  url: "api/external/irods",
-                  data: {
-                    username: username,
-                    id: id,
-                    show_files: ((type === "push")?false:true)
-                  },
-                  success: function(data, status){
-                    adaptData(data[0]);
-                    var message = "Choose the directory where the files will be stored.";
-                    if(type === "pull"){
-                      message = "Choose the file to upload.";
-                    }
-                    $('#irods-selector-message').text(message).removeClass("text-info");
-                    $('#irods-selector-tree').treeview({data: data});
-                  },
-                  error:function(){
-                    $('#irods-selector-message').text("Unable to connect to iRODS. Please contact your system administrator.").removeClass("text-info").addClass("text-danger");
-                    console.error("Error in iRODS selector dialog: unable to retrieve the files list. Is iRODS running on your server?");
-                  }
-                });
-              },
-              error:function(){
-                $('#irods-selector-message').text("Unable to connect to iRODS. Please contact your system administrator.").removeClass("text-info").addClass("text-danger");
-                console.error("Unable to retrive current user information from Galaxy.");
-              }
-            });
-          })
-        }
-
-        //Show the dialog
-        $( "#irods-selector-dialog" ).modal();
-      });
-    }
-  });
+				//Show the dialog
+				$( "#irods-selector-dialog" ).modal();
+			});
+		}
+	});
 });
 
 
