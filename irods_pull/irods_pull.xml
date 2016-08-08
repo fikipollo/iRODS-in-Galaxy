@@ -28,9 +28,12 @@
 		#end if
 
 		##7. Galaxy params
+		#set params["job_id"] = str($output.creating_job.id)
+		#set params["output_dir"] = str($output.files_path)
+		#set params["output_file"] = str($output)
+		#set params["file_type"] = str($file_type)
 		#set params["GALAXY_ROOT_DIR"] = str($GALAXY_ROOT_DIR)
 		#set params["GALAXY_DATATYPES_CONF_FILE"] = str($GALAXY_DATATYPES_CONF_FILE)
-		#set params["job_id"] = str($output.creating_job.id)
 
 		#import json
 		#set $params=json.dumps($params)
@@ -42,6 +45,14 @@
 	<inputs>
 		<param name="filePath" type="text" value="" label="File to load (click here to select):" />
 		<param name="customName" type="text" value="" label="Name for file in Galaxy:" />
+		<param name="file_type" type="select" hidden="true" label="File Format" help="Which format? See help below">
+			<options from_parameter="tool.app.datatypes_registry.upload_file_formats" transform_lines="[ &quot;%s%s%s&quot; % ( line, self.separator, line ) for line in obj ]">
+				<column name="value" index="1"/>
+				<column name="name" index="0"/>
+				<filter type="sort_by" column="0"/>
+				<filter type="add_value" name="Auto-detect" value="auto" index="0"/>
+			</options>
+		</param>
 		<conditional name="user_option">
 			<param type="select" display="radio" name="typeUser" label="Credentials for iRODS [see help for more information]: ">
 				<option value="use_galaxy_user">Use my Galaxy username for iRODS.</option>
@@ -55,7 +66,7 @@
 	</inputs>
 
 	<outputs>
-		<data format="txt" name="output" metadata_source="selectedFiles"/>
+		<data name="output" label="${tool.name}: ${customName}" auto_format="true" />
 	</outputs>
 
 	<help>

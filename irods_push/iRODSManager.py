@@ -152,6 +152,8 @@ class IRODSManager:
 		if valid != 2:
 			raise CollectionDoesNotExist("Unable to find the file '" + file_name + "' in directory " + file_path + " in iRODS.")
 
+		print "Copying the file from iRODS..."
+
 		#Step 2. Copy the file content to a temporal file
 		obj = self.session.data_objects.get(file_path  + fileName)
 		with obj.open('r+') as input:
@@ -160,15 +162,15 @@ class IRODSManager:
 		output.close()
 		input.close()
 
-		import os
+		print "Registering the file in Galaxy..."
 
 		file_content = {
 			"uuid": None,
-			"file_type": "auto",
+			"file_type": galaxy_params["file_type"],
 			"space_to_tab": False,
 			"dbkey": "?",
 			"to_posix_lines": True,
-			"ext": "txt", #TODO: GET FROM METADATA
+			"ext": galaxy_params["file_type"],
 			"path": os.path.abspath(output.name),
 			"in_place": True,
 			"dataset_id": galaxy_params["job_id"],
@@ -178,23 +180,19 @@ class IRODSManager:
 			"name": custom_name
 		}
 
-		with open("temporal.json","w") as output:
-			output.write(json.dumps(file_content))
-		output.close()
+		with open("temporal.json","w") as fileParams:
+			fileParams.write(json.dumps(file_content))
+		fileParams.close()
 
 		#Step 3. Call to Galaxy's upload tool
-		command = "python " + galaxy_params["GALAXY_ROOT_DIR"]\
-		+ "/tools/data_source/upload.py"\
+		command = "python " + galaxy_params["GALAXY_ROOT_DIR"] + "/tools/data_source/upload.py"\
 		+ " " + galaxy_params["GALAXY_ROOT_DIR"]\
 		+ " " + galaxy_params["GALAXY_DATATYPES_CONF_FILE"]\
-		+ " " + os.path.abspath(output.name)\
-		+ " " + galaxy_params["job_id"] + ":/usr/local/galaxy/database/jobs_directory/000/" + galaxy_params["job_id"] + "/dataset_" + galaxy_params["job_id"] + "_files:/usr/local/galaxy/database/files/000/dataset_" + galaxy_params["job_id"] + ".dat"
+		+ " " + os.path.abspath(fileParams.name)\
+		+ " " + galaxy_params["job_id"] + ":" + galaxy_params["output_dir"] + ":" + galaxy_params["output_file"]
 
-		print command
 		os.system(command)
 
-		#from time import sleep
-		#sleep 5
 		return True
 
 	def checkDestinationPermissions(self, destination_dir, user_name, file_name):

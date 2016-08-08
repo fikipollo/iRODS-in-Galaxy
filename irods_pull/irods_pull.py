@@ -41,11 +41,15 @@ def main():
 	# -- sys.argv[1] is the params for the file
 	#	  1. File to upload
 	#	  2. Custom name
-	#	  3. The history ID
-	#	  4. Current Galaxy user
-	#	  5. Custom user
-	#	  6. Custom pass
-	# -- sys.argv[2] is the history json
+	#	  3. Current Galaxy user
+	#	  4. Custom user
+	#	  5. Custom pass
+	#	  6. Job ID
+	#	  7. Output dir path
+	#	  8. Output file path
+	#	  9. File type
+	#	 10. GALAXY_ROOT_DIR
+	#	 11. GALAXY_DATATYPES_CONF_FILE
 
 	#Read the params
 	params = json.loads(sys.argv[1])
