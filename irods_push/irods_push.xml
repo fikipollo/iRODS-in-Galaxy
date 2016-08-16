@@ -1,199 +1,218 @@
+<tool id="irods_push" name="Save files to iRODS" version="0.1" workflow_compatible="true">
+	<description>Save your files from the Galaxy workflow in iRODS</description>
+	<requirements>
+		<requirement type="package" version="0.5.0">pythonirodsclient</requirement>
+	</requirements>
 
-<tool id="irods_push" name="Save files to iRODS" version="0.1">
-  <description>Save your files from the workflow in iRODS</description>
-  <requirements>
-    <requirement type="package" version="0.5.0">pythonirodsclient</requirement>
-  </requirements>
+	<command interpreter="python">
+		##------------------------------------------------------------------------------------
+		## This function calculates the associations between the different jobs based on the
+		## datasets used as input or output for the jobs.
+		##------------------------------------------------------------------------------------
+		#def findJobAssociations_HistoryDataset($dataset, $job_associations)
+		#if ($use_deleted or $dataset.deleted == False) and ($use_hidden or $dataset.visible == True)
+		#for $assoc in $dataset.creating_job_associations
+		#set $job_associations[$assoc.job.id] = $assoc.job
+		#end for
+		#end if
+		#end def
 
-  <command interpreter="python">
-    ##------------------------------------------------------------------------------------
-    ## This function calculates the associations between the different jobs based on the
-    ## datasets used as input or output for the jobs.
-    ##------------------------------------------------------------------------------------
-    #def findJobAssociations_HistoryDataset($dataset, $job_associations)
-    #if ($use_deleted or $dataset.deleted == False) and ($use_hidden or $dataset.visible == True)
-    #for $assoc in $dataset.creating_job_associations
-    #set $job_associations[$assoc.job.id] = $assoc.job
-    #end for
-    #end if
-    #end def
+		##------------------------------------------------------------------------------------
+		## This function calculates the associations between the different jobs based on the
+		## collection of datasets used as input or output for the jobs.
+		##------------------------------------------------------------------------------------
+		#def findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
+		#if ($use_deleted or $dataset_coll.deleted == False) and ($use_hidden or $dataset_coll.visible == True)
+		$findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
+		#end if
+		#end def
 
-    ##------------------------------------------------------------------------------------
-    ## This function calculates the associations between the different jobs based on the
-    ## collection of datasets used as input or output for the jobs.
-    ##------------------------------------------------------------------------------------
-    #def findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
-    #if ($use_deleted or $dataset_coll.deleted == False) and ($use_hidden or $dataset_coll.visible == True)
-    $findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
-    #end if
-    #end def
+		##------------------------------------------------------------------------------------
+		## This function calculates recursively the associations between the different jobs
+		## based on the collection of datasets used as input or output for the jobs.
+		##------------------------------------------------------------------------------------
+		#def findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
+		#for $dataset in $dataset_coll.elements
+		#if $dataset.hda
+		$findJobAssociations_HistoryDataset($dataset.hda, $job_associations)
+		##elif $dataset.ldda
+		##		#TODO
+		##		$enum_LibraryDatasetAssociation($dataset.ldda, $job_associations)
+		#elif $dataset.child_collection
+		$findJobAssociations_HistoryDatasetCollection_rec($dataset.child_collection, $job_associations)
+		#end if
+		#end for
+		#end def
 
-    ##------------------------------------------------------------------------------------
-    ## This function calculates recursively the associations between the different jobs
-    ## based on the collection of datasets used as input or output for the jobs.
-    ##------------------------------------------------------------------------------------
-    #def findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
-    #for $dataset in $dataset_coll.elements
-    #if $dataset.hda
-    $findJobAssociations_HistoryDataset($dataset.hda, $job_associations)
-    ##elif $dataset.ldda
-    ##    #TODO
-    ##    $enum_LibraryDatasetAssociation($dataset.ldda, $job_associations)
-    #elif $dataset.child_collection
-    $findJobAssociations_HistoryDatasetCollection_rec($dataset.child_collection, $job_associations)
-    #end if
-    #end for
-    #end def
+		##------------------------------------------------------------------------------------
+		## This function creates a new instance of an Input object that will be added to a
+		## job instance
+		##------------------------------------------------------------------------------------
+		#def createInputInstance($jda)
+		#set $instance = {}
+		#if $jda.dataset
+		#set $instance["name"] = str($jda.name)
+		#set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
+		#set $instance["file"] = str($jda.dataset.name)
+		#end if
+		#return $instance
+		#end def
 
-    ##------------------------------------------------------------------------------------
-    ## This function creates a new instance of an Input object that will be added to a
-    ## job instance
-    ##------------------------------------------------------------------------------------
-    #def createInputInstance($jda)
-    #set $instance = {}
-    #if $jda.dataset
-    #set $instance["name"] = str($jda.name)
-    #set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
-    #set $instance["file"] = str($jda.dataset.name)
-    #end if
-    #return $instance
-    #end def
+		##------------------------------------------------------------------------------------
+		## This function creates a new instance of an Output object that will be added to a
+		## job instance
+		##------------------------------------------------------------------------------------
+		#def createOutputInstance($jda)
+		#set $instance = {}
+		#if $jda.dataset
+		#set $instance["name"] = str($jda.name)
+		#set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
+		#set $instance["file"] = str($jda.dataset.name)
+		#end if
+		#return $instance
+		#end def
 
-    ##------------------------------------------------------------------------------------
-    ## This function creates a new instance of an Output object that will be added to a
-    ## job instance
-    ##------------------------------------------------------------------------------------
-    #def createOutputInstance($jda)
-    #set $instance = {}
-    #if $jda.dataset
-    #set $instance["name"] = str($jda.name)
-    #set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
-    #set $instance["file"] = str($jda.dataset.name)
-    #end if
-    #return $instance
-    #end def
+		##------------------------------------------------------------------------------------
+		## This function creates a new instance of Job.
+		##------------------------------------------------------------------------------------
+		#def createJobInstance($job)
+		#set $instance = {}
+		#set $instance["id"] = str($job.id)
+		#set $instance["tool_id"] = str($job.tool_id)
+		#set $instance["state"] = str($job.state)
+		#set $instance["exit_code"] = str($job.exit_code)
+		#set $instance["inputs"] = []
+		#set $instance["outputs"] = []
 
-    ##------------------------------------------------------------------------------------
-    ## This function creates a new instance of Job.
-    ##------------------------------------------------------------------------------------
-    #def createJobInstance($job)
-    #set $instance = {}
-    #set $instance["id"] = str($job.id)
-    #set $instance["tool_id"] = str($job.tool_id)
-    #set $instance["state"] = str($job.state)
-    #set $instance["exit_code"] = str($job.exit_code)
-    #set $instance["inputs"] = []
-    #set $instance["outputs"] = []
+		#for $input_dataset in $job.input_datasets
+		$instance["inputs"].append($createInputInstance($input_dataset))
+		#end for
 
-    #for $input_dataset in $job.input_datasets
-    $instance["inputs"].append($createInputInstance($input_dataset))
-    #end for
+		#for $output_dataset in $job.output_datasets
+		$instance["outputs"].append($createOutputInstance($output_dataset))
+		#end for
 
-    #for $output_dataset in $job.output_datasets
-    $instance["outputs"].append($createOutputInstance($output_dataset))
-    #end for
+		#return $instance
+		#end def
 
-    #return $instance
-    #end def
+		##------------------------------------------------------------------------------------
+		## Main body of the tool
+		##------------------------------------------------------------------------------------
+		## First we process the current history and get a table with the metadata for each job
+		#set global $history = $output.creating_job.history
+		#set global $use_deleted = True
+		#set global $use_hidden = True
 
-    ##------------------------------------------------------------------------------------
-    ## Main body of the tool
-    ##------------------------------------------------------------------------------------
-    ## First we process the current history and get a table with the metadata for each job
-    #set global $history = $output.creating_job.history
-    #set global $use_deleted = True
-    #set global $use_hidden = True
+		#set $job_associations = {}
+		#for $dataset in $history.datasets
+		$findJobAssociations_HistoryDataset($dataset, $job_associations)
+		#end for
+		#for $dataset_coll in $history.dataset_collections
+		$findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
+		#end for
 
-    #set $job_associations = {}
-    #for $dataset in $history.datasets
-    $findJobAssociations_HistoryDataset($dataset, $job_associations)
-    #end for
-    #for $dataset_coll in $history.dataset_collections
-    $findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
-    #end for
+		## Now we export the table to a string
+		#set $job_table={}
+		#for $job_id, $job in $job_associations.iteritems()
+		#if $job_id != $output.creating_job.id
+		#set $job_table[str($job_id)] = $createJobInstance($job)
+		#end if
+		#end for
+		#import json
+		#set $job_table=json.dumps($job_table)
 
-    ## Now we export the table to a string
-    #set $job_table={}
-    #for $job_id, $job in $job_associations.iteritems()
-    #if $job_id != $output.creating_job.id
-    #set $job_table[str($job_id)] = $createJobInstance($job)
-    #end if
-    #end for
-    #import json
-    #set $job_table=json.dumps($job_table)
+		## Set the params for the next Python script
+		#set params={}
+		##1. Destination directory
+		#set params["destination_dir"] = str($destinationDir)
+		##2. Overwrite option
+		#set params["overwrite"] = str($overwrite)
+		##3. The history ID
+		#set params["history_id"] = $__app__.security.encode_id($output.history.id)
+		##4. The selected dataset id
+		#set params["dataset_id"] = $__app__.security.encode_id('%s' % $selectedFiles.id)
+		##5. The selected dataset name
+		#set params["dataset_name"] = str($selectedFiles.name)
+		##6. The selected dataset file name
+		#set params["file_name"] = str($selectedFiles.file_name)
+		##7. The selected dataset file format
+		#set params["file_format"] = str($output.ext)
+		##8. Current Galaxy user
+		#set params["user_name"] = str($__user_name__)
+
+		#if $user_option.typeUser=="use_custom_user"
+		##9. Custom user
+		#set params["custom_user"] = str($user_option.custom_user)
+		##10. Custom pass
+		#set params["custom_pass"] = str($user_option.custom_pass)
+		#end if
+
+		#import json
+		#set $params=json.dumps($params)
+
+		##Execute the main tool script
+		irods_push.py '$params' '$job_table'
+	</command>
+
+	<inputs>
+		<param type="select" display="radio" name="overwrite" label="Overwrite existing files?">
+			<option value="false">No</option>
+			<option value="true">Yes, overwrite (use at your own risk)</option>
+		</param>
+		<param name="destinationDir" type="text" value="" label="Destination directory (click here to choose):" />
+		<conditional name="user_option">
+			<param type="select" display="radio" name="typeUser" label="Credentials for iRODS [see help for more information]: ">
+				<option value="use_galaxy_user">Use my Galaxy username for iRODS.</option>
+				<option value="use_custom_user">Use custom credentials.</option>
+			</param>
+			<when value="use_custom_user">
+				<param name="custom_user" type="text" value="" label="iRODS username:" />
+				<param name="custom_pass" type="text" value="" label="iRODS password:" />
+			</when>
+		</conditional>
+		<param format="data" name="selectedFiles" type="data" label="File(s) to export:" />
+	</inputs>
+
+	<outputs>
+		<data format="txt" name="output" metadata_source="selectedFiles"/>
+	</outputs>
+
+	<help>
+===============
+iRODS push
+===============
 
 
-    ## Set the params for the next Python script
-    #set params=[]
-    ##1. Destination directory
-    #set aux = $destinationDir
-    $params.append(str($aux))
-    ##2. Overwrite option
-    #set aux = $overwrite
-    $params.append(str($aux))
-    ##3. The history ID
-    $params.append($__app__.security.encode_id($output.history.id))
-    ##4. The selected dataset id
-    $params.append($__app__.security.encode_id('%s' % $selectedFiles.id))
-    ##5. The selected dataset name
-    $params.append(str($selectedFiles.name))
-    ##6. The selected dataset file name
-    $params.append(str($selectedFiles.file_name))
-    ##7. The selected dataset file format
-    $params.append(str($output.ext))
-    ##8. Current Galaxy user
-    $params.append(str($__user_name__))
-    ##set user_id = $__app__.security.encode_id($output.history.user_id)
-    ##set user_email = str($__user_email__)
+**What it does**
 
-    #if $user_option.typeUser=="use_custom_user"
-    ##9. Custom user
-    #set aux = $user_option.custom_user
-    $params.append(str($aux))
-    ##10. Custom pass
-    #set aux = $user_option.custom_pass
-    $params.append(str($aux))
-    #end if
+Use this tool to save files from the current Galaxy history to the selected location in your iRODS filesystem.
+This tool also stored some metadata for each file, including the author (galaxy user), history identifier, and 
+the *file provenance*.
 
-    ##Execute the main tool script
-    irods_push.py "${params}" '$job_table'
-  </command>
+--------
 
-  <inputs>
-    <param type="select" display="radio" name="overwrite" label="Overwrite existing files?">
-      <option value="false">No</option>
-      <option value="true">Yes, overwrite (use at your own risk)</option>
-    </param>
-    <param name="destinationDir" type="text" value="" label="Destination directory (click here to choose):" />
-    <conditional name="user_option">
-      <param type="select" display="radio" name="typeUser" label="Credentials for iRODS [see help for more information]: ">
-        <option value="use_galaxy_user">Use my Galaxy username for iRODS.</option>
-        <option value="use_custom_user">Use custom credentials.</option>
-      </param>
-      <when value="use_custom_user">
-        <param name="custom_user" type="text" value="" label="iRODS username:" />
-        <param name="custom_pass" type="text" value="" label="iRODS password:" />
-      </when>
-    </conditional>
-    <param format="data" name="selectedFiles" type="data" label="File(s) to export:" />
-  </inputs>
+**How to use**
 
-  <outputs>
-    <data format="txt" name="output" metadata_source="selectedFiles"/>
-  </outputs>
+First choose the directory in iRODS where the files will be saved using the directory browser (if available).
+Alternatively, you can write the complete path to the destination directory.
 
-  <help>
-    Use this tool to save any number of files from the history to the selected location in your iRODS filesystem.
-    First choose the directory in iRODS where the files will be saved.
-    Then, select the file(s) to save and click on "Execute".
+Then, choose the file(s) that you want to save and click on "Execute".
 
-    Note: By default files are not overwrited so if a file already exists at the specified folder (with the same name), by default the new file will be stored with an automatic suffix (e.g. myfile_2.txt).
-    You can change the default behaviour by checking the corresponding option at form.  Use this option with caution and always at your own risk.
+By default, the tool will use your galaxy username as iRODS user.
+If you want to use your own iRODS credentials choose the option *Use custom credentials* and fill the corresponding fields.
 
-    Author: Rafael Hernández de Diego, SLU Global Bioinformatics Centre,
-    https://github.com/fikipollo
+.. class:: warningmark
 
-    Author: Partially based on the work of Katherine Beaulieu, AAFC-MBB
-    https://github.com/AAFC-MBB/Galaxy/tree/dev/wrappers/irods_push
-  </help>
+**Note**: By default files are not overwrited so if a file already exists at the specified folder (with the same name), by default the new file will be stored with an automatic suffix (e.g. myfile_2.txt).
+You can change the default behaviour by checking the corresponding option at the form. Use this option with caution and always at your own risk.
+
+-----
+
+**Author**: Rafael Hernández de Diego [SLU Global Bioinformatics Centre]
+
+**Author**: Partially based on the work of Katherine Beaulieu [AAFC-MBB]
+
+Sources are available at https://github.com/fikipollo/iRODS-in-Galaxy
+
+	</help>
 </tool>

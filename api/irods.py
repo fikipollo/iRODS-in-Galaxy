@@ -23,29 +23,24 @@
    SOFTWARE.
 
    Contributors:
-        Rafael Hernandez de Diego <rafahdediego@gmail.com>
-        Tomas Klingstrom
-        Erik Bongcam-Rudloff
-        and others.
+      Rafael Hernandez de Diego <rafahdediego@gmail.com>
+      Tomas Klingstrom
+      Erik Bongcam-Rudloff
+      and others.
 
-API operations for iRODS
+   API operations for iRODS
 '''
+
 from __future__ import absolute_import
 
 import logging
 import urllib
-#from sqlalchemy import desc, false, or_, true
+
 from galaxy import exceptions, util
 from galaxy.model.item_attrs import UsesAnnotations
-#from galaxy.managers import histories
-#from galaxy.managers import workflows
 from galaxy.web import _future_expose_api as expose_api
 from galaxy.web.base.controller import BaseAPIController, url_for, UsesStoredWorkflowMixin
 from galaxy.web.base.controller import SharableMixin
-#from galaxy.workflow.extract import extract_workflow
-#from galaxy.workflow.run import invoke, queue_invoke
-#from galaxy.workflow.run_request import build_workflow_run_config
-#from galaxy.workflow.modules import module_factory
 
 from irods.session import iRODSSession
 from irods.exception import DataObjectDoesNotExist
@@ -59,70 +54,121 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 
 	def __init__( self, app ):
 		super( IRODSAPIController, self ).__init__( app )
+		self.host = ""
+		self.port = ""
+		self.user = ""
+		self.zone = ""
+		self.passwd = ""
+		self.session = None
 
 	@expose_api
 	def index(self, trans, payload, **kwd):
 		"""
 		POST /api/external/irods
 
-		Displays a collection of files for the user
+		Displays a collection of files stored in an external iRODS server,
+		for the current Galaxy user, or using the provided credentials.
+
+		Note: this tool requires the python-irodsclient API installed in the Galaxy instance.
+
+		Note: by default the iRODS session will be created using the credentials stored
+ 		      at the .irodsA and the irods_environment.json files unless the user provides
+			  some custom credentials.
+			  Instructions for creating these files are available at the tool repository.
+
+		@param	trans
+		@param	payload
+		@return the directories tree in JSON format.
 
 		"""
-		#READ CREDENTIALS FROM CONFIG
-		#CREDENTIALS MUST BE STORED IN ~/.irods
-		#TODO: ADD CREDENTIALS IN GALAXY CONFIG FILE
-		pwFile = "/home/" + getpass.getuser() + "/.irods/.irodsA"
-		envFile = "/home/" + getpass.getuser() + "/.irods/irods_environment.json"
-
-		with open(envFile) as f:
-			data = json.load(f)
-
-		host   =  str(data["irods_host"])
-		port   =  str(data["irods_port"])
-		user   =  str(data["irods_user_name"])
-		zone   =  str(data["irods_zone_name"])
-
-		with open(pwFile) as f:
-			first_line = f.readline().strip()
-		passwd = decode(first_line)
-
-		#READ client_user FROM REQUEST
-		try:
-			client_user = payload[ 'username' ]
-			passwd = payload[ 'password' ]
-			sess = iRODSSession(host=host, port=port, user=client_user, password=passwd, zone=zone)
-		except Exception as e:
-			client_user = trans.user.username #READ username FROM GALAXY SESSION
-			sess = iRODSSession(host=host, port=port, user=user, password=passwd, zone=zone, client_user=client_user) #, client_zone=client_zone)
-
+		#STEP 1. READ THE PARAMS
+		client_user = payload.get("username", trans.user.username )
+		client_passwd = payload.get("password", None)
+		#IF THE REQUEST DOES NOT INCLUDE THE FLAG "show_files", SHOW ONLY DIRECTORIES
 		show_files = False
 		if "show_files" in payload:
 			show_files = payload[ 'show_files' ]
 
-		#GET THE CONTENTS
-		#TODO: use custom directory client_zone (form)
-		#TODO: GET ALL THE R/W DIRECTORIES FOR CURRENT USER?
-		
-		root = "/" + zone + "/home/"
+		#STEP 2. OPEN A NEW SESSION
+		self.openSession(client_user, client_passwd);
+
+		#STEP 3. GET THE DIRECTORY CONTENTS
+		#TODO: GET ALL THE R/W DIRECTORIES FOR CURRENT USER? CURRENTLY WE ONLY SHOW THE HOME DIR
+		root = "/" + self.zone + "/home/"
 		results = ""
 		try:
-			coll = sess.collections.get(root + client_user)
-			results = self.getCollectionAsTree(coll, show_files, root)
+			collection = self.session.collections.get(root + client_user)
+			results = self.getCollectionAsTree(collection, show_files, root)
 		except Exception as e:
 			pass
 		finally:
 			#CLOSE SESSION
-			sess.cleanup()
-			del sess
+			self.closeSession();
 
 		return [results]
 
-	def getCollectionAsTree(self, coll, show_files, root=None):
-		tree={"name" : coll.name, "children": [], "type": "dir"}
-		for col in coll.subcollections:
+	def openSession(self, user_name, passwd=None):
+		"""
+		This function creates a new session in iRODS
+
+		Note: by default the iRODS session will be created using the credentials stored
+ 		      at the .irodsA and the irods_environment.json files unless the user provides
+			  some custom credentials.
+			  Instructions for creating these files are available at the tool repository.
+		"""
+		if self.session == None:
+			#READ CREDENTIALS FROM THE CONFIG FILES STORED IN ~/.irods AFTER USING iCommands
+			#CREDENTIALS MUST BE STORED IN ~/.irods
+			#TODO: ADD THE iRODS CREDENTIALS IN THE GALAXY CONFIG FILE
+			pwFile = "/home/" + getpass.getuser() + "/.irods/.irodsA"
+			envFile = "/home/" + getpass.getuser() + "/.irods/irods_environment.json"
+
+			with open(envFile) as f:
+				data = json.load(f)
+
+			self.host   =  str(data["irods_host"])
+			self.port   =  str(data["irods_port"])
+			self.user   =  str(data["irods_user_name"])
+			self.zone   =  str(data["irods_zone_name"])
+
+			if(passwd == None):
+				#Use default user and password but custom client username and zone
+				with open(pwFile) as f:
+					first_line = f.readline().strip()
+				self.passwd = decode(first_line)
+				#TODO: use custom directory client_zone (form)
+				self.session = iRODSSession(self.host, port=self.port, user=self.user, password=self.passwd, zone=self.zone, client_user=user_name)#, client_zone=client_zone)
+			else:
+				#Use custom user and password
+				#TODO: use custom directory client_zone (form)
+				self.session = iRODSSession(host=self.host, port=self.port, user=user_name, password=passwd, zone=self.zone)
+
+		return self.session
+
+	def closeSession(self):
+		"""
+		This function closes the existing session in iRODS
+		"""
+		if self.session != None:
+			self.session.cleanup()
+			del self.session
+			self.session = None
+		return True
+
+	def getCollectionAsTree(self, collection, show_files, root=None):
+		"""
+		This function gets the sub-directories tree for a given root.
+
+		@param	collection the collection to browse
+		@param	show_files if true, includes all the files in a directory
+		@param	root, the first directory to explore
+		@return the directories tree in JSON format.
+		"""
+		tree={"name" : collection.name, "children": [], "type": "dir"}
+		for col in collection.subcollections:
 			tree["children"].append(self.getCollectionAsTree(col, show_files))
 		if show_files:
-			for obj in coll.data_objects:
+			for obj in collection.data_objects:
 				tree["children"].append({"name" : obj.name, "type": "file"})
 
 		if root != None:
@@ -135,11 +181,15 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 		return tree
 
 
-import hashlib
-import os
-import time
+"""
+This file is part of the iRODS project.
+Copyright (c) 2005-2016, Regents of the University of California, the University
+of North Carolina at Chapel Hill, and the Data Intensive Cyberinfrastructure
+Foundation
 
-import six
+https://github.com/irods/irods/blob/master/scripts/irods/password_obfuscation.py
+"""
+import os
 
 seq_list = [
         0xd768b678,
@@ -217,159 +267,3 @@ def decode(s, uid=None):
             decoded_string += c
 
     return decoded_string
-
-#encode passwords to store in the .irodsA file
-def encode(s, uid=None, mtime=None):
-    #mtime & 65535 needs to be within 20 seconds of the
-    #.irodsA file's mtime & 65535
-    if mtime is None:
-        mtime = int(time.time())
-
-    #How much we bitshift seq by when we use it
-    #Referred to as "addin_i" in the C code
-    #We can't skip the first five bytes this time,
-    #so we start at 0
-    bitshift = 0
-
-    #The uid is used as a salt.
-    if uid is None:
-        uid = os.getuid()
-
-    #This value lets us know which seq value to use
-    #Referred to as "rval" in the C code
-    #The C code is very specific about this being mtime & 15,
-    #but it's never checked. Let's use zero.
-    seq_index = 0
-    seq = seq_list[seq_index]
-
-    to_encode = ''
-
-    #The C code DOES really care about this value matching
-    #the seq_index, though
-    to_encode += chr(ord('S') - ((seq_index & 0x7) * 2))
-
-    #And this is also a song and dance to
-    #convince the C code we are legitimate
-    to_encode += chr(((mtime >> 4) & 0xf) + ord('a'))
-    to_encode += chr((mtime & 0xf) + ord('a'))
-    to_encode += chr(((mtime >> 12) & 0xf) + ord('a'))
-    to_encode += chr(((mtime >> 8) & 0xf) + ord('a'))
-
-    #We also want to actually encode the passed string
-    to_encode += s
-
-    #Yeah, the string starts with a dot. Whatever.
-    encoded_string = '.'
-
-    for c in to_encode:
-        if ord(c) == 0:
-            break
-
-        #How far this character is from the target character in wheel
-        #Referred to as "add_in" in the C code
-        offset = ((seq >> bitshift) & 0x1f) + (uid & 0xf5f)
-
-        bitshift += 3
-        if bitshift > 28:
-            bitshift = 0
-
-        #The character is only encoded if it's one of the ones in wheel
-        if c in wheel:
-            #index of the target character in wheel
-            wheel_index = (wheel.index(c) + offset) % len(wheel)
-            encoded_string += wheel[wheel_index]
-        else:
-            encoded_string += c
-
-    #insert the seq_index (which is NOT encoded):
-    encoded_string = chr(seq_index + ord('e')).join([
-            encoded_string[:6],
-            encoded_string[6:]
-        ])
-
-    #aaaaand, append a null character. because we want to print
-    #a null character to the file. because that's a good idea.
-    encoded_string += chr(0)
-
-    return encoded_string
-
-#Hash some stuff to create ANOTHER encoder ring.
-def get_encoder_ring(key=default_password_key):
-
-    md5_hasher = hashlib.md5()
-    #key (called keyBuf in the C) is padded
-    #or truncated to 100 characters
-    md5_hasher.update(key.ljust(100, chr(0))[:100].encode('ascii'))
-    first = md5_hasher.digest()
-
-    md5_hasher = hashlib.md5()
-    md5_hasher.update(first)
-    second = md5_hasher.digest()
-
-    md5_hasher = hashlib.md5()
-    md5_hasher.update(first + second)
-    third = md5_hasher.digest()
-
-    return first + second + third + third
-
-#unscramble passwords stored in the database
-def unscramble(s, key=default_password_key, scramble_prefix=default_scramble_prefix, block_chaining=False):
-    if key is None:
-        key=default_password_key
-
-    if not s.startswith(scramble_prefix):
-        #not scrambled. or if it is, not
-        #in a way we can unscramble
-        return s
-
-    #the prefix is nonsense, strip it off
-    to_unscramble = s[len(scramble_prefix):]
-
-    #get our encoder ring (called cpKey in the C code)
-    encoder_ring = get_encoder_ring(key)
-    encoder_ring_index = 0
-
-    #for block chaining
-    chain = 0
-
-    unscrambled_string = ''
-    for c in to_unscramble:
-        if c in wheel:
-            #the index of the target character in wheel
-            wheel_index = (wheel.index(c) - six.indexbytes(encoder_ring, encoder_ring_index % 61) - chain) % len(wheel)
-            unscrambled_string += wheel[wheel_index]
-            if block_chaining:
-                chain = ord(c) & 0xff
-        else:
-            unscrambled_string += c
-        encoder_ring_index += 1
-
-    return unscrambled_string
-
-#scramble passwords to store in the database
-def scramble(s, key=default_password_key, scramble_prefix=default_scramble_prefix, block_chaining=False):
-    if key is None:
-        key=default_password_key
-
-    to_scramble = s
-
-    #get our encoder ring (called cpKey in the C code)
-    encoder_ring = get_encoder_ring(key)
-    encoder_ring_index = 0
-
-    #for block chaining
-    chain = 0
-
-    scrambled_string = ''
-    for c in to_scramble:
-        if c in wheel:
-            #the index of the target character in wheel
-            wheel_index = (wheel.index(c) + six.indexbytes(encoder_ring, encoder_ring_index % 61) + chain) % len(wheel)
-            scrambled_string += wheel[wheel_index]
-            if block_chaining:
-                chain = ord(scrambled_string[-1]) & 0xff
-        else:
-            scrambled_string += c
-        encoder_ring_index += 1
-
-    return scramble_prefix + scrambled_string

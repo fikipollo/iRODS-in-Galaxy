@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 '''
    The MIT License (MIT)
 
@@ -28,6 +27,8 @@
       Tomas Klingstrom
       Erik Bongcam-Rudloff
       and others.
+
+	  A Galaxy tool to interact with an external iRODS server.
 '''
 
 import sys
@@ -40,14 +41,17 @@ import getpass
 from irods.exception import DataObjectDoesNotExist, CollectionDoesNotExist
 from irods.models import Collection, User, DataObject
 from irods.session import iRODSSession
-from password_obfuscation import decode
-
+from irods_password_obfuscation import decode
 
 class IRODSManager:
 
-	#initialize your irods session by reading off irods credentials from .irodsA file and from irods_environment.json file
 	def __init__(self):
-		"""Initialize the IRODSManager"""
+		"""
+		This funcion initialize the IRODSManager
+
+		Note: this tool requires the python-irodsclient API installed in the Galaxy instance.
+
+		"""
 		self.host = ""
 		self.port = ""
 		self.user = ""
@@ -56,13 +60,21 @@ class IRODSManager:
 		self.session = None
 
 	def openSession(self, user_name, passwd=None):
-		"""Creates a new session in iRODS"""
+		"""
+		This function creates a new session in iRODS
+
+		Note: by default the iRODS session will be created using the credentials stored
+ 		      at the .irodsA and the irods_environment.json files unless the user provides
+			  some custom credentials.
+			  Instructions for creating these files are available at the tool repository.
+		"""
 		if self.session == None:
-			#READ CREDENTIALS FROM CONFIG
+			#READ CREDENTIALS FROM THE CONFIG FILES STORED IN ~/.irods AFTER USING iCommands
 			#CREDENTIALS MUST BE STORED IN ~/.irods
-			#TODO: ADD CREDENTIALS IN GALAXY CONFIG FILE
+			#TODO: ADD THE iRODS CREDENTIALS IN THE GALAXY CONFIG FILE
 			pwFile = "/home/" + getpass.getuser() + "/.irods/.irodsA"
 			envFile = "/home/" + getpass.getuser() + "/.irods/irods_environment.json"
+
 			with open(envFile) as f:
 				data = json.load(f)
 
@@ -71,30 +83,43 @@ class IRODSManager:
 			self.user   =  str(data["irods_user_name"])
 			self.zone   =  str(data["irods_zone_name"])
 
-			with open(pwFile) as f:
-				first_line = f.readline().strip()
-			self.passwd = decode(first_line)
-
 			if(passwd == None):
 				#Use default user and password but custom client username and zone
-				#TODO CUSTOM CLIENT DIR?
+				with open(pwFile) as f:
+					first_line = f.readline().strip()
+				self.passwd = decode(first_line)
+				#TODO: use custom directory client_zone (form)
 				self.session = iRODSSession(self.host, port=self.port, user=self.user, password=self.passwd, zone=self.zone, client_user=user_name)#, client_zone=client_zone)
 			else:
 				#Use custom user and password
-				#TODO: ZONE?
+				#TODO: use custom directory client_zone (form)
 				self.session = iRODSSession(host=self.host, port=self.port, user=user_name, password=passwd, zone=self.zone)
 
 		return self.session
 
 	def closeSession(self):
-		"""Closes the existing session in iRODS"""
+		"""
+		This function closes the existing session in iRODS
+		"""
 		if self.session != None:
 			self.session.cleanup()
 			del self.session
 			self.session = None
 
 	def pushFile(self, origin_file, destination_dir, file_name, overwrite, metadata):
-		"""Push a given file to the iRODS server"""
+		"""
+		This function push a given file to the iRODS server
+
+		@param	origin_file, the dataset to save
+		@param	destination_dir, path to destination dir in iRODS
+		@param	file_name, the name for the file in Galaxy
+		@param	overwrite, if true existing files with same name will be replaced
+		@param	metadata, the metadata for the file (including provenance)
+		@return True if finished succesfully
+		@throws IOError if the file does not exist in the Galaxy server
+		@throws CollectionDoesNotExist if the destination directory does not exist
+		        or if it is not writable for the current user
+		"""
 		#Step 1. Check if the origin file is valid
 		import os.path
 		if not os.path.isfile(origin_file):
@@ -134,6 +159,17 @@ class IRODSManager:
 		return True
 
 	def pullFile(self, file_path, custom_name, user_name, galaxy_params):
+		"""
+		This function pulls a given file from a iRODS server
+
+		@param	file_path, the path to the file in iRODS
+		@param	custom_name, a custom name for the file in the Galaxy history
+		@param	user_name, the name for the galaxy user
+		@param	galaxy_params, different params extracted from Galaxy environment
+		@return True if finished succesfully
+		@throws CollectionDoesNotExist if the file path does not exist
+		        or if it is not readable for the current user
+		"""
 		#Step 1. Check if the origin directory exists and is valid for current user
 		file_path = file_path.split("/")
 		if len(file_path) < 2:
@@ -196,11 +232,15 @@ class IRODSManager:
 		return True
 
 	def checkDestinationPermissions(self, destination_dir, user_name, file_name):
-		"""This function checks if the destination directory exits and, if so,
+		"""
+		This function checks if the destination directory exits and, if so,
 		if the current user can write at that directory. Finally the function
 		checks if the destination dir already contents a file with the given
 		filename
 
+		@param	destination_dir, path to destination dir in iRODS
+		@param	user_name, the name for the galaxy user
+		@param	file_name, the name for the file in Galaxy
 		@returns Integer valid, where
 		             -1 destination does not exists
 		              1 destination not RW for current user
@@ -230,12 +270,22 @@ class IRODSManager:
 		return 0
 
 	def copyFileToIRODS(self, destination_dir, origin_file, file_name, metadata):
-		"""This function copies a local file to the remote destination directory.
+		"""
+		This function copies a local file to the remote destination directory.
 		First the function removes the remote file if already exists. To avoid
 		overwriting files, in previous steps the filename should be changed to a
 		non-existing remote filename.
 		Then the file is copied to the remote server and a validation step is run
 		in order to check if the file has been copied succesfully.
+
+		@param	destination_dir, path to destination dir in iRODS
+		@param	origin_file, the dataset to save
+		@param	file_name, the name for the file in Galaxy
+		@param	metadata, the metadata for the file (including provenance)
+		@return True if finished succesfully
+		@throws IOError if the value for the MD5SUM for the original file differs
+		        from the value for the copy in iRODS (error during copy)
+
 		"""
 		print "Copying file " + origin_file + " as " + file_name
 
@@ -274,7 +324,16 @@ class IRODSManager:
 		return True
 
 	def setFileMetadata(self, destination_dir, file_name, metadata):
-		"""This function sets the metadata for a given file"""
+		"""
+		This function sets the metadata for a given file
+
+		@param	destination_dir, path to destination dir in iRODS
+		@param	file_name, the name for the file in Galaxy
+		@param	metadata, the metadata for the file (including provenance)
+		@return True if finished succesfully
+		@throws DataObjectDoesNotExist if the file does not exists in iRODS
+		
+		"""
 		# Step 1. Check if file exists
 		path = os.path.join(destination_dir, file_name)
 		obj = self.session.data_objects.get(path)

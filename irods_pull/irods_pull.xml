@@ -1,4 +1,4 @@
-<tool id="irods_pull" name="Load files from iRODS" version="0.1">
+<tool id="irods_pull" name="Load files from iRODS" version="0.1" workflow_compatible="false">
 	<description>Load your files from iRODS into your Galaxy history</description>
 	<requirements>
 		<requirement type="package" version="0.5.0">pythonirodsclient</requirement>
@@ -70,13 +70,34 @@
 	</outputs>
 
 	<help>
-		Use this tool to load any number of files from your iRODS filesystem into the current Galaxy history.
-		First choose the files in iRODS, set a custom name for the file in Galaxy (optional) and click on "Execute".
+===============
+iRODS pull
+===============
 
-		Author: Rafael Hernández de Diego, SLU Global Bioinformatics Centre,
-		https://github.com/fikipollo
 
-		Author: Partially based on the work of Katherine Beaulieu, AAFC-MBB
-		https://github.com/AAFC-MBB/Galaxy/tree/dev/wrappers/irods_push
+**What it does**
+
+Use this tool to load a file from your iRODS filesystem into the current Galaxy history.
+
+--------
+
+**How to use**
+
+First choose the file in iRODS using the directory browser (if available).
+Alternatively, you can write the complete path to the file in iRODS.
+
+Then, set a custom name for the file in Galaxy (optional) and click on "Execute".
+
+By default, the tool will use your galaxy username as iRODS user.
+If you want to use your own iRODS credentials choose the option *Use custom credentials* and fill the corresponding fields.
+
+-----
+
+**Author**: Rafael Hernández de Diego [SLU Global Bioinformatics Centre]
+
+**Author**: Partially based on the work of Katherine Beaulieu [AAFC-MBB]
+
+Sources are available at https://github.com/fikipollo/iRODS-in-Galaxy
+
 	</help>
 </tool>

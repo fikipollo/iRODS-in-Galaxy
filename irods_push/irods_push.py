@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 '''
    The MIT License (MIT)
 
@@ -24,10 +23,12 @@
    SOFTWARE.
 
    Contributors:
-        Rafael Hernandez de Diego <rafahdediego@gmail.com>
-        Tomas Klingström
-        Erik Bongcam-Rudloff
-        and others.
+      Rafael Hernandez de Diego <rafahdediego@gmail.com>
+      Tomas Klingstrom
+      Erik Bongcam-Rudloff
+      and others.
+
+	  A Galaxy tool to store files in an external iRODS server.
 '''
 
 import sys
@@ -36,89 +37,89 @@ import json
 from iRODSManager import IRODSManager
 
 def main():
-    #for now the assumption is that the user is using this tool in a linux environment
-    # -- sys.argv[0] is the python script
-    # -- sys.argv[1] is the params for the file
-    #      1. Destination directory
-    #      2. Overwrite option
-    #      3. The history ID
-    #      4. The selected dataset id
-    #      5. The selected dataset name
-    #      6. The selected dataset file name
-    #      7. The selected dataset file format
-    #      8. Current Galaxy user
-    #      9. Custom user
-    #      10. Custom pass
-    # -- sys.argv[2] is the history json
+	"""
+	This function reads the params and sends a file from the Galaxy history to an
+	iRODS server using the 'pushFile' function defined in the IRODSManager class.
+	Credentials for iRODS should be stored in the Galaxy server.
 
-    #Read the params
-    params = eval(sys.argv[1])
-    history_json = json.loads(sys.argv[2])
+	Note: this tool requires the python-irodsclient API installed in the Galaxy instance.
 
-    destination_dir = params[0]
-    overwrite = (params[1] == "true")
+	The accepted params are:
+	 -- sys.argv[0] is the python script
+	 -- sys.argv[1] is a JSON-like string containing the params for the script
+		  1. destination_dir, the path for the destination directory in iRODS
+		  2. overwrite, overwrite or keep existing files with same name
+		  3. history_id, the current history identifier
+		  4. dataset_id, the identifier for the selected dataset
+		  5. dataset_name, the name for the selected dataset
+		  6. file_name, the file name for the selected dataset
+		  7. file_format, the file format for the selected dataset
+		  8. user_name, current Galaxy username
+		  9. custom_user, custom user for iRODS (optional)
+		 10. custom_pass, custom pass for iRODS (optional)
+	 -- sys.argv[2] is the current Galaxy history in JSON-like format
+	"""
+	#STEP 1. Read the params
+	params = json.loads(sys.argv[1])
+	history_json = json.loads(sys.argv[2])
 
-    file_name = params[4]
-    origin_file = params[5]
+	custom_user = params["user_name"]
+	custom_pass = None
+	if "custom_user" in params:
+		custom_user = params["custom_user"]
+		custom_pass = params["custom_pass"]
 
-    metadata = {
-        "history_id" : params[2],
-        "dataset_id" : params[3],
-        "format"     : params[6],
-        "user_name"  : params[7]
-    }
+	#STEP 2. COMPLETE THE METADATA FOR THE FILE USING THE GALAXY API
+	# 2.a. FROM INPUT PARAMS
+	metadata = {
+		"history_id" : params["history_id"],
+		"dataset_id" : params["dataset_id"],
+		"format"     : params["file_format"],
+		"user_name"  : params["user_name"]
+	}
 
-    custom_user = None
-    custom_pass = None
+	# 2.b. GENERATE THE PROVENANCE FOR THE FILE BASED ON THE HISTORY
+	datasets_table = {}
+	provenance_list = []
+	already_added = {}
+	origin_job = None
+	#   2.b.i. Process the history data and generate the table dataset -> job id
+	for job_id, job_instance in history_json.iteritems():
+		for output_item in job_instance["outputs"]:
+			datasets_table[output_item["id"]] = job_instance
+			if output_item["id"] == metadata["dataset_id"]:
+				origin_job=job_instance
 
-    if len(params) > 8:
-        custom_user = params[8]
-        custom_pass = params[9]
+	#   2.b.ii. Get the origin job
+	provenance_list = generateProvenance(origin_job, datasets_table, provenance_list, already_added)
+	metadata["provenance"] = json.dumps(provenance_list);
 
-    #STEP 2. COMPLETE THE METADATA FOR THE FILE USING THE GALAXY API
-    #GENERATE THE provenance
-    datasets_table = {}
-    provenance_list = []
-    already_added = {}
-    origin_job = None
-    # 1. Process the history data and generate the table dataset -> job id
-    for job_id, job_instance in history_json.iteritems():
-        for output_item in job_instance["outputs"]:
-            datasets_table[output_item["id"]] = job_instance
-            if output_item["id"] == metadata["dataset_id"]:
-                origin_job=job_instance
+	#STEP 3. UPLOAD THE FILE USING THE iRODS API
+	irodsManager = IRODSManager()
+	irodsManager.openSession(custom_user, custom_pass)
+	irodsManager.pushFile(params["file_name"], params["destination_dir"], params["dataset_name"], (params["overwrite"] == "true"), metadata)
+	irodsManager.closeSession()
 
-    # 2. Get the origin job
-    provenance_list = generateProvenance(origin_job, datasets_table, provenance_list, already_added)
-    metadata["provenance"] = json.dumps(provenance_list);
-    # print metadata["provenance"]
-
-    #STEP 3. SEND THE FILE TO iRODS API
-    irodsManager = IRODSManager()
-
-    if custom_user != None:
-        irodsManager.openSession(custom_user, custom_pass)
-    else:
-        irodsManager.openSession(metadata["user_name"], None)
-
-    irodsManager.pushFile(origin_file, destination_dir, file_name, overwrite, metadata)
-    irodsManager.closeSession()
-
-    return ""
+	return ""
 
 def generateProvenance(job_instance, datasets_table, provenance_list, already_added):
-    #if not in provenance_list --> push
-    if not job_instance["id"] in already_added:
-        already_added[job_instance["id"]] = 1
-        provenance_list.append(job_instance)
+	"""
+	This function generates the provenance for a given dataset from a the Galaxy history.
+	Starting from the job that results in the dataset, the script goes back in the history
+	selecting all the jobs whose results were used to produce the final dataset.
+	"""
+	#if not in provenance_list --> push
+	if not job_instance["id"] in already_added:
+		already_added[job_instance["id"]] = 1
+		provenance_list.append(job_instance)
 
-    #Get the input files
-    #For each input file, get the origin job
-    for input_item in job_instance["inputs"]:
-        origin_job = datasets_table[input_item["id"]]
-        generateProvenance(origin_job, datasets_table, provenance_list, already_added)
+	#Get the input files
+	#For each input file, get the origin job
+	for input_item in job_instance["inputs"]:
+		origin_job = datasets_table[input_item["id"]]
+		generateProvenance(origin_job, datasets_table, provenance_list, already_added)
 
-    return provenance_list
+	return provenance_list
 
 if __name__ == "__main__":
-    main()
+	main()
