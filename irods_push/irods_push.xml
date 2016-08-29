@@ -78,32 +78,43 @@
 		## job instance
 		##------------------------------------------------------------------------------------
 		#def createParameterInstance($parameter_name, $parameter_value)
-			#if "HistoryDatasetAssociation" in $parameter_value.__class__.__name__ or $parameter_name.startswith("__"):
-				#return None
 			##Check if is a dict
-			#else if isinstance($parameter_value, dict):
+			#if isinstance($parameter_value, dict):
 				#for $parameter_name_aux, $parameter_value_aux in $parameter_value.items()
-					#set parameterInstance = $createParameterInstance($parameter_name_aux, $parameter_value_aux)
-					#if $parameterInstance != None
+					#set $parameterInstance = $createParameterInstance($parameter_name_aux, $parameter_value_aux)
+					#if $parameterInstance != ""
 						#set $parameter_value[$parameter_name_aux] = $parameterInstance
+					#else
+						#del $parameter_value[$parameter_name_aux]
 					#end if
 				#end for
+			##Check if is a list
 			#else if isinstance($parameter_value, list):
-				#set i = 1
-				#set aux = {}
+				#set $i = 1
+				#set $aux = {}
 				#for $parameter_value_aux in $parameter_value
-					#set parameterInstance = $createParameterInstance(str($i), $parameter_value_aux)
-					#if $parameterInstance != None
+					#set $parameterInstance = $createParameterInstance(str($i), $parameter_value_aux)
+					#if $parameterInstance != ""
 						#set $aux[$i] = $parameterInstance
-						#set i=i+1
+						#set $i=$i+1
 					#end if
 				#end for
+				#set $parameter_value = $aux.values()
 			##Check if is an object
-			#else if hasattr($parameter_value, '__dict__')
-				#set $parameter_value="Python Object " + $parameter_value.__class__.__name__
+			#else
+				#try
+					##Ignore HistoryDatasetAssociation objects and parameters not interesting
+					#if ("HistoryDatasetAssociation" in $parameter_value.__class__.__name__) or ($parameter_name.startswith("__")):
+						#return ""
+					#end if
+				#except
+					#pass
+				#end try
+
+				#set $parameter_value = str($parameter_value)
 			#end if
 
-			#set $instance = {"name" : $parameter_name, "value" : str($parameter_value)}
+			#set $instance = {"name" : $parameter_name, "value" : $parameter_value}
 			#return $instance
 		#end def
 
@@ -131,11 +142,11 @@
 			#end for
 
 			#if $job.tool_id != "upload1"
-				#set parameters = $job.get_param_values($__app__)
+				#set $parameters = $job.get_param_values($__app__)
 				#for $parameter_name, $parameter_value in $parameters.items()
-					#set parameterInstance = $createParameterInstance($parameter_name, $parameter_value)
-					#if $parameterInstance != None
-						$instance["parameters"].append($parameterInstance)
+					#set $parameter = $createParameterInstance($parameter_name, $parameter_value)
+					#if $parameter != ""
+						$instance["parameters"].append($parameter)
 					#end if
 				#end for
 			#end if
@@ -153,21 +164,19 @@
 
 		#set $job_associations = {}
 		#for $dataset in $history.datasets
-		$findJobAssociations_HistoryDataset($dataset, $job_associations)
+			$findJobAssociations_HistoryDataset($dataset, $job_associations)
 		#end for
 		#for $dataset_coll in $history.dataset_collections
-		$findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
+			$findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
 		#end for
 
 		## Now we export the table to a string
 		#set $job_table={}
 		#for $job_id, $job in $job_associations.iteritems()
-		#if $job_id != $output.creating_job.id
-		#set $job_table[str($job_id)] = $createJobInstance($job)
-		#end if
+			#if $job_id != $output.creating_job.id
+				#set $job_table[str($job_id)] = $createJobInstance($job)
+			#end if
 		#end for
-		#import json
-		#set $job_table=json.dumps($job_table)
 
 		## Set the params for the next Python script
 		#set params={}
@@ -185,21 +194,25 @@
 		#set params["file_name"] = str($selectedFiles.file_name)
 		##7. The selected dataset file format
 		#set params["file_format"] = str($output.ext)
-		##8. Current Galaxy user
+		##8. The output file dir for the job
+		#set params["output_dir"] = str($output.files_path)
+		##9. Current Galaxy user
 		#set params["user_name"] = str($__user_name__)
 
 		#if $user_option.typeUser=="use_custom_user"
-		##9. Custom user
-		#set params["custom_user"] = str($user_option.custom_user)
-		##10. Custom pass
-		#set params["custom_pass"] = str($user_option.custom_pass)
+			##10. Custom user
+			#set params["custom_user"] = str($user_option.custom_user)
+			##11. Custom pass
+			#set params["custom_pass"] = str($user_option.custom_pass)
 		#end if
 
 		#import json
+		#set $file=open($params["output_dir"] + '.tmp', 'w+')
+		$file.write(json.dumps($job_table))
 		#set $params=json.dumps($params)
 
 		##Execute the main tool script
-		irods_push.py '$params' '$job_table'
+		irods_push.py '$params'
 	</command>
 
 	<inputs>

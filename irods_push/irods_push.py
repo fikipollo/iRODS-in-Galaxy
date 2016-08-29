@@ -54,14 +54,17 @@ def main():
 		  5. dataset_name, the name for the selected dataset
 		  6. file_name, the file name for the selected dataset
 		  7. file_format, the file format for the selected dataset
-		  8. user_name, current Galaxy username
-		  9. custom_user, custom user for iRODS (optional)
-		 10. custom_pass, custom pass for iRODS (optional)
+		  8. output_dir, the dir for the output files for current job
+		  9. user_name, current Galaxy username
+		 10. custom_user, custom user for iRODS (optional)
+		 11. custom_pass, custom pass for iRODS (optional)
 	 -- sys.argv[2] is the current Galaxy history in JSON-like format
 	"""
 	#STEP 1. Read the params
+	import json
 	params = json.loads(sys.argv[1])
-	history_json = json.loads(sys.argv[2])
+	with open(params["output_dir"] + '.tmp') as data_file:
+	    history_json = json.load(data_file)
 
 	custom_user = params["user_name"]
 	custom_pass = None
