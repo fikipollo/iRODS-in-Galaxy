@@ -10,11 +10,11 @@
 		## datasets used as input or output for the jobs.
 		##------------------------------------------------------------------------------------
 		#def findJobAssociations_HistoryDataset($dataset, $job_associations)
-		#if ($use_deleted or $dataset.deleted == False) and ($use_hidden or $dataset.visible == True)
-		#for $assoc in $dataset.creating_job_associations
-		#set $job_associations[$assoc.job.id] = $assoc.job
-		#end for
-		#end if
+			#if ($use_deleted or $dataset.deleted == False) and ($use_hidden or $dataset.visible == True)
+				#for $assoc in $dataset.creating_job_associations
+					#set $job_associations[$assoc.job.id] = $assoc.job
+				#end for
+			#end if
 		#end def
 
 		##------------------------------------------------------------------------------------
@@ -22,9 +22,9 @@
 		## collection of datasets used as input or output for the jobs.
 		##------------------------------------------------------------------------------------
 		#def findJobAssociations_HistoryDatasetCollection($dataset_coll, $job_associations)
-		#if ($use_deleted or $dataset_coll.deleted == False) and ($use_hidden or $dataset_coll.visible == True)
-		$findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
-		#end if
+			#if ($use_deleted or $dataset_coll.deleted == False) and ($use_hidden or $dataset_coll.visible == True)
+				$findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
+			#end if
 		#end def
 
 		##------------------------------------------------------------------------------------
@@ -32,30 +32,31 @@
 		## based on the collection of datasets used as input or output for the jobs.
 		##------------------------------------------------------------------------------------
 		#def findJobAssociations_HistoryDatasetCollection_rec($dataset_coll, $job_associations)
-		#for $dataset in $dataset_coll.elements
-		#if $dataset.hda
-		$findJobAssociations_HistoryDataset($dataset.hda, $job_associations)
-		##elif $dataset.ldda
-		##		#TODO
-		##		$enum_LibraryDatasetAssociation($dataset.ldda, $job_associations)
-		#elif $dataset.child_collection
-		$findJobAssociations_HistoryDatasetCollection_rec($dataset.child_collection, $job_associations)
-		#end if
-		#end for
+			#for $dataset in $dataset_coll.elements
+				#if $dataset.hda
+					$findJobAssociations_HistoryDataset($dataset.hda, $job_associations)
+				##elif $dataset.ldda
+					##		#TODO
+					##		$enum_LibraryDatasetAssociation($dataset.ldda, $job_associations)
+				#elif $dataset.child_collection
+					$findJobAssociations_HistoryDatasetCollection_rec($dataset.child_collection, $job_associations)
+				#end if
+			#end for
 		#end def
 
 		##------------------------------------------------------------------------------------
 		## This function creates a new instance of an Input object that will be added to a
 		## job instance
+		## http://galaxy.readthedocs.io/en/master/_modules/galaxy/model.html#Dataset
 		##------------------------------------------------------------------------------------
 		#def createInputInstance($jda)
-		#set $instance = {}
-		#if $jda.dataset
-		#set $instance["name"] = str($jda.name)
-		#set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
-		#set $instance["file"] = str($jda.dataset.name)
-		#end if
-		#return $instance
+			#set $instance = {}
+			#if $jda.dataset
+				#set $instance["name"] = str($jda.name)
+				#set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
+				#set $instance["file"] = str($jda.dataset.name)
+			#end if
+			#return $instance
 		#end def
 
 		##------------------------------------------------------------------------------------
@@ -63,36 +64,83 @@
 		## job instance
 		##------------------------------------------------------------------------------------
 		#def createOutputInstance($jda)
-		#set $instance = {}
-		#if $jda.dataset
-		#set $instance["name"] = str($jda.name)
-		#set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
-		#set $instance["file"] = str($jda.dataset.name)
-		#end if
-		#return $instance
+			#set $instance = {}
+			#if $jda.dataset
+				#set $instance["name"] = str($jda.name)
+				#set $instance["id"] = str($__app__.security.encode_id($jda.dataset.id))
+				#set $instance["file"] = str($jda.dataset.name)
+			#end if
+			#return $instance
+		#end def
+
+		##------------------------------------------------------------------------------------
+		## This function creates a new instance of a Parameter object that will be added to a
+		## job instance
+		##------------------------------------------------------------------------------------
+		#def createParameterInstance($parameter_name, $parameter_value)
+			#if "HistoryDatasetAssociation" in $parameter_value.__class__.__name__ or $parameter_name.startswith("__"):
+				#return None
+			##Check if is a dict
+			#else if isinstance($parameter_value, dict):
+				#for $parameter_name_aux, $parameter_value_aux in $parameter_value.items()
+					#set parameterInstance = $createParameterInstance($parameter_name_aux, $parameter_value_aux)
+					#if $parameterInstance != None
+						#set $parameter_value[$parameter_name_aux] = $parameterInstance
+					#end if
+				#end for
+			#else if isinstance($parameter_value, list):
+				#set i = 1
+				#set aux = {}
+				#for $parameter_value_aux in $parameter_value
+					#set parameterInstance = $createParameterInstance(str($i), $parameter_value_aux)
+					#if $parameterInstance != None
+						#set $aux[$i] = $parameterInstance
+						#set i=i+1
+					#end if
+				#end for
+			##Check if is an object
+			#else if hasattr($parameter_value, '__dict__')
+				#set $parameter_value="Python Object " + $parameter_value.__class__.__name__
+			#end if
+
+			#set $instance = {"name" : $parameter_name, "value" : str($parameter_value)}
+			#return $instance
 		#end def
 
 		##------------------------------------------------------------------------------------
 		## This function creates a new instance of Job.
+		## http://galaxy.readthedocs.io/en/master/_modules/galaxy/model.html#Job
 		##------------------------------------------------------------------------------------
 		#def createJobInstance($job)
-		#set $instance = {}
-		#set $instance["id"] = str($job.id)
-		#set $instance["tool_id"] = str($job.tool_id)
-		#set $instance["state"] = str($job.state)
-		#set $instance["exit_code"] = str($job.exit_code)
-		#set $instance["inputs"] = []
-		#set $instance["outputs"] = []
+			#set $instance = {}
+			#set $instance["id"] = str($job.id)
+			#set $instance["tool_id"] = str($job.tool_id)
+			#set $instance["tool_version"] = str($job.tool_version)
+			#set $instance["state"] = str($job.state)
+			#set $instance["exit_code"] = str($job.exit_code)
+			#set $instance["inputs"] = []
+			#set $instance["outputs"] = []
+			#set $instance["parameters"] = []
 
-		#for $input_dataset in $job.input_datasets
-		$instance["inputs"].append($createInputInstance($input_dataset))
-		#end for
+			#for $input_dataset in $job.input_datasets
+				$instance["inputs"].append($createInputInstance($input_dataset))
+			#end for
 
-		#for $output_dataset in $job.output_datasets
-		$instance["outputs"].append($createOutputInstance($output_dataset))
-		#end for
+			#for $output_dataset in $job.output_datasets
+				$instance["outputs"].append($createOutputInstance($output_dataset))
+			#end for
 
-		#return $instance
+			#if $job.tool_id != "upload1"
+				#set parameters = $job.get_param_values($__app__)
+				#for $parameter_name, $parameter_value in $parameters.items()
+					#set parameterInstance = $createParameterInstance($parameter_name, $parameter_value)
+					#if $parameterInstance != None
+						$instance["parameters"].append($parameterInstance)
+					#end if
+				#end for
+			#end if
+
+			#return $instance
 		#end def
 
 		##------------------------------------------------------------------------------------
@@ -186,7 +234,7 @@ iRODS push
 **What it does**
 
 Use this tool to save files from the current Galaxy history to the selected location in your iRODS filesystem.
-This tool also stored some metadata for each file, including the author (galaxy user), history identifier, and 
+This tool also stored some metadata for each file, including the author (galaxy user), history identifier, and
 the *file provenance*.
 
 --------
