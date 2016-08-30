@@ -53,7 +53,7 @@ $(window).load(function() {
 				}
 			});
 
-			console.log("iRODS integration: new events assigned to file selector field");
+			console.log("iRODS integration: new event added to file selector field");
 			elem.click(function() {
 				if($('#irods-selector-dialog').length === 0){
 					//Inject the HTML elem for the folder selection.
@@ -65,34 +65,47 @@ $(window).load(function() {
 					'          <h4 class="modal-title">Please, choose the location in iRODS</h4>' +
 					'        </div>' +
 					'        <div class="modal-body">' +
-					'          <b id="irods-selector-message" class=".text-info">Loading the iRODS content...</b>' +
-					'          <div id="irods-selector-tree"></div>' +
+					'          <span style="display:none;" id="irods-selector-type"></span>' +
+					'          <b id="irods-selector-message" class="text-info">Loading the iRODS content...</b>' +
+					'          <div id="irods-selector-tree" style="margin-top:15px;max-height: 600px; overflow: auto;"></div>' +
 					'        </div>' +
 					'        <div class="modal-footer">' +
-					'          <button type="button" id="irods-selector-ok-button" class="btn btn-info" data-dismiss="modal">Use selection</button>' +
+					'          <button type="button" id="irods-selector-ok-button" class="btn btn-success" >Use selection</button>' +
 					'          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>' +
 					'        </div>' +
 					'      </div>' +
 					'    </div>' +
 					'  </div>';
 					$("body").append(selectorHTML);
+
 					//Set the event handler for the "Accept" button in the dialog
+					console.log("iRODS integration: new event added to file selector dialog");
 					$("#irods-selector-ok-button").click(function(){
 						//Get the absolute path for the selection in the tree
 						var elem = $("div[tour_id=destinationDir]");
 						if (elem.length === 0){
 							elem = $("div[tour_id=filePath]");
 						}
-						//TODO: detect if in pull the selection is a folder -> invalid
+
 						var path = "";
 						var tree = $('#irods-selector-tree').treeview(true);
 						if(tree.getSelected().length > 0){
-							var node = tree.getSelected()[0];
-							path = node.text;
+							var selectedNode = tree.getSelected()[0];
 
-							while(node.parentId !== undefined){
-								node = tree.getNode(node.parentId)
-								path = node.text + "/" + path;
+							var type = $('#irods-selector-type').text();
+							debugger
+							if(type === "pull" && selectedNode.type !== "file"){
+								$('#irods-selector-message').text("Invalid selection, please choose a file, not a directory.").removeClass("text-info").addClass("text-danger");
+								return
+							}else if(type === "push" && selectedNode.allow !== 1){
+								$('#irods-selector-message').text("Invalid selection, the selected directory is not writable by current user.").removeClass("text-info").addClass("text-danger");
+								return
+							}
+
+							path = selectedNode.text;
+							while(selectedNode.parentId !== undefined){
+								selectedNode = tree.getNode(selectedNode.parentId)
+								path = selectedNode.text + "/" + path;
 							}
 						}
 						path = path.replace(/\/\//g, "/");
@@ -106,9 +119,10 @@ $(window).load(function() {
 							fileName=fileName[fileName.length -1];
 							elem.find("input").val(fileName).trigger("input");;
 						}
-
+						$( "#irods-selector-dialog" ).modal("hide");
 					});
 
+					//Set the handler for the "On Show" event fired when opening the dialog
 					$( "#irods-selector-dialog" ).on('show.bs.modal', function (e) {
 						var adaptData = function(data){
 							if(data.type === "dir"){
@@ -124,8 +138,7 @@ $(window).load(function() {
 							data.nodes = data.children;
 							delete data.name;
 							delete data.children;
-							delete data.type;
-						}
+						};
 
 						var elem = $("div[tour_id=destinationDir]");
 						var type = "push";
@@ -133,7 +146,8 @@ $(window).load(function() {
 							elem = $("div[tour_id=filePath]");
 							type = "pull";
 						}
-						//TODO: CUSTOM USER AND PASS
+
+						//TODO: CUSTOM USER AND PASS FOR FILE BROWSING
 						$.ajax({
 							url: "api/external/irods",
 							method: "POST",
@@ -148,7 +162,9 @@ $(window).load(function() {
 								if(type === "pull"){
 									message = "Choose the file to upload to current Galaxy history.";
 								}
-								$('#irods-selector-message').text(message).removeClass("text-info");
+								$('#irods-selector-type').text(type);
+								$('#irods-selector-message').text(message).removeClass("text-danger").addClass("text-info");
+								$('#irods-selector-error').text("");
 								$('#irods-selector-tree').treeview({data: data});
 							},
 							error:function(){

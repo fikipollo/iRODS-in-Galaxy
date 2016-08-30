@@ -181,11 +181,9 @@ class IRODSManager:
 		valid = self.checkDestinationPermissions(file_path, user_name, fileName)
 		if valid == -1:
 			raise CollectionDoesNotExist("File path not valid. The path " + file_path + " does not exist in iRODS." )
-		if valid == 1:
+		elif valid == 1:
 			raise CollectionDoesNotExist("File path not valid. The directory " + file_path + " in iRODS is not readable for current user." )
-		if valid == 0:
-			raise CollectionDoesNotExist("Unable to find the file '" + file_name + "' in directory " + file_path + " in iRODS.")
-		if valid != 2:
+		elif valid != 2:
 			raise CollectionDoesNotExist("Unable to find the file '" + file_name + "' in directory " + file_path + " in iRODS.")
 
 		print "Copying the file from iRODS..."
@@ -249,7 +247,6 @@ class IRODSManager:
 		"""
 		# Step 1. Check if destination dir exists
 		destination_dir = destination_dir.rstrip("/")
-
 		try:
 			self.session.collections.get(destination_dir)
 		except Exception as e:

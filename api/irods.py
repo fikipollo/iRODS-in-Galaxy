@@ -89,25 +89,70 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 		if "show_files" in payload:
 			show_files = payload[ 'show_files' ]
 
-		#STEP 2. OPEN A NEW SESSION
-		self.openSession(client_user, client_passwd);
-
-		#STEP 3. GET THE DIRECTORY CONTENTS
-		#TODO: GET ALL THE R/W DIRECTORIES FOR CURRENT USER? CURRENTLY WE ONLY SHOW THE HOME DIR
+		# ALTERNATIVE 1 ------------------------------------------------------------
+		#   CHECK ALL THE DIRECTORIES IN THE TREE AND GET ALL THE DIRS THAT
+		#   ARE WRITABLE BY THE USER
+		#   THIS OPTION COULD BE SLOW IF iRODS IS FULL OF DATA, IN THAT CASE, THE
+		#   ALTERNATIVE 2 REDUCES TIMES BUT IS LESS EFECTIVE
+		#----------------------------------------------------------------------------
 		root = "/" + self.zone + "/home/"
 		results = ""
 		try:
-			collection = self.session.collections.get(root + client_user)
-			results = self.getCollectionAsTree(collection, show_files, root)
+			#STEP 2. OPEN A NEW SESSION AS ROOT
+			self.openSession();
+			coll = self.session.collections.get("/b3devZone")
+			#Get all the directories and files
+			tree = coll.walk()
+			self.closeSession();
+
+			#STEP 3. OPEN A NEW SESSION AS CLIENT
+			self.openSession(client_user, client_passwd);
+
+			#STEP 4. REMOVE ALL NOT VALID PATHS FOR THE USER
+			valid = []
+			for node in tree:
+				if self.session.collections.exists(node[0].path):
+					valid.append((node[0].path, node[2]))
+
+			#STEP 5. GENERATE THE TREE
+			ALL_NODES = {}
+			for node in valid:
+				#get existing or create a new new
+				newNode = ALL_NODES.get(node[0], {"name" : node[0].split("/")[-1], "children": [], "type": "dir"})
+				if show_files:
+					for f in node[1]:
+						newNode["children"].append({"name" : f.path.replace(node[0] + "/", ""), "type": "file"})
+				#Using this flag we discriminate which directories are valid for selection
+				newNode["allow"] = 1
+				#Add the node to the tree
+				parentNode = self.getParentNode("/".join(node[0].split("/")[0:-1]), ALL_NODES)
+				parentNode["children"].append(newNode)
+				ALL_NODES[node[0]] = newNode
+
+			results = ALL_NODES["/"]
+
+		# ALTERNATIVE 2 ------------------------------------------------------------
+		#   CHECKS ONLY THE HOME DIRECTORY FOR THE CURRENT USER AND GETS ALL THE
+		#   DIRS THAT ARE WRITABLE BY THE USER
+		#   THIS OPTION IS FASTER BUT IS LESS EFECTIVE AND IGNORE OTHER DIRECTORIES
+		#----------------------------------------------------------------------------
+		#	#STEP 2. OPEN A NEW SESSION
+		#	self.openSession(client_user, client_passwd);
+		#
+		#	#STEP 3. GET THE DIRECTORY CONTENTS
+		#	#WE ONLY SHOW THE HOME DIR
+		#	root = "/" + self.zone + "/home/"
+		#	collection = self.session.collections.get(root + client_user)
+		#	results = self.getCollectionAsTree(collection, show_files, root)
 		except Exception as e:
+			results = str(e)
 			pass
 		finally:
 			#CLOSE SESSION
 			self.closeSession();
-
 		return [results]
 
-	def openSession(self, user_name, passwd=None):
+	def openSession(self, user_name=None, passwd=None):
 		"""
 		This function creates a new session in iRODS
 
@@ -131,7 +176,14 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 			self.user   =  str(data["irods_user_name"])
 			self.zone   =  str(data["irods_zone_name"])
 
-			if(passwd == None):
+			if(user_name == None): #Root connection
+				#Use default user and password but custom client username and zone
+				with open(pwFile) as f:
+					first_line = f.readline().strip()
+				self.passwd = decode(first_line)
+				#TODO: use custom directory client_zone (form)
+				self.session = iRODSSession(self.host, port=self.port, user=self.user, password=self.passwd, zone=self.zone)#, client_zone=client_zone)
+			elif(passwd == None):
 				#Use default user and password but custom client username and zone
 				with open(pwFile) as f:
 					first_line = f.readline().strip()
@@ -164,7 +216,7 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 		@param	root, the first directory to explore
 		@return the directories tree in JSON format.
 		"""
-		tree={"name" : collection.name, "children": [], "type": "dir"}
+		tree={"name" : collection.name, "children": [], "type": "dir", "allow" : 1}
 		for col in collection.subcollections:
 			tree["children"].append(self.getCollectionAsTree(col, show_files))
 		if show_files:
@@ -176,9 +228,24 @@ class IRODSAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnnotat
 			root.reverse()
 			for _dir in root:
 				_dir = (_dir or "/")
-				tree={"name" : _dir, "children": [tree], "type": "dir"}
+				tree={"name" : _dir, "children": [tree], "type": "dir", "allow" : 0}
 
 		return tree
+
+	def getParentNode(self, parentNodePath, ALL_NODES):
+		if parentNodePath in ALL_NODES:
+			return ALL_NODES.get(parentNodePath)
+		if parentNodePath == "":
+			newNode={"name" : "/", "children": [], "type": "dir", "allow" : 0}
+			ALL_NODES["/"] = newNode
+			return newNode
+		else:
+			newNode = {"name" : parentNodePath.split("/")[-1], "children": [], "type": "dir", "allow" : 0}
+			parentNode = self.getParentNode("/".join(parentNodePath.split("/")[0:-1]), ALL_NODES)
+			parentNode["children"].append(newNode)
+			ALL_NODES[parentNodePath] = newNode
+			return newNode
+
 
 
 """
