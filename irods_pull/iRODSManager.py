@@ -116,7 +116,7 @@ class IRODSManager:
 		@param	file_name, the name for the file in Galaxy
 		@param	overwrite, if true existing files with same name will be replaced
 		@param	metadata, the metadata for the file (including provenance)
-		@return True if finished succesfully
+		@return True if finished successfully
 		@throws IOError if the file does not exist in the Galaxy server
 		@throws CollectionDoesNotExist if the destination directory does not exist
 		        or if it is not writable for the current user
@@ -138,15 +138,15 @@ class IRODSManager:
 			aux_fileName = file_name
 			i = 0
 			while valid == 2:
-				print "File " + aux_fileName + " already exits. Generating new name."
+				print("File " + aux_fileName + " already exits. Generating new name.")
 				aux_fileName = file_name.split(".")[0]
 				try:
 					extension = file_name.split(".")[1]
-				except Exception as e:
+				except Exception:
 					extension = ""
 				i+=1
 				aux_fileName = aux_fileName + "_" + str(i) + "." + extension
-				print "New name is " + aux_fileName
+				print("New name is " + aux_fileName)
 
 				valid = self.checkDestinationPermissions(destination_dir, metadata["user_name"], aux_fileName)
 			file_name = aux_fileName
@@ -167,7 +167,7 @@ class IRODSManager:
 		@param	custom_name, a custom name for the file in the Galaxy history
 		@param	user_name, the name for the galaxy user
 		@param	galaxy_params, different params extracted from Galaxy environment
-		@return True if finished succesfully
+		@return True if finished successfully
 		@throws CollectionDoesNotExist if the file path does not exist
 		        or if it is not readable for the current user
 		"""
@@ -187,7 +187,7 @@ class IRODSManager:
 		elif valid != 2:
 			raise CollectionDoesNotExist("Unable to find the file '" + fileName + "' in directory " + file_path + " in iRODS.")
 
-		print "Copying the file from iRODS..."
+		print("Copying the file from iRODS...")
 
 		#Step 2. Copy the file content to a temporal file
 		obj = self.session.data_objects.get(file_path  + fileName)
@@ -197,7 +197,7 @@ class IRODSManager:
 		output.close()
 		input.close()
 
-		print "Registering the file in Galaxy..."
+		print("Registering the file in Galaxy...")
 
 		file_content = {
 			"uuid": None,
@@ -251,7 +251,7 @@ class IRODSManager:
 		destination_dir = destination_dir.rstrip("/")
 		try:
 			self.session.collections.get(destination_dir)
-		except Exception as e:
+		except Exception:
 			return -1
 
 		# Step 2. Check if destination dir is R/W for current user
@@ -261,7 +261,7 @@ class IRODSManager:
 		# Step 3. Check if destination contains a file with same filename
 		try:
 			self.session.data_objects.get(destination_dir + "/" + file_name)
-		except Exception as e:
+		except Exception:
 			pass #does not exists
 		else:
 			return 2
@@ -275,18 +275,18 @@ class IRODSManager:
 		overwriting files, in previous steps the filename should be changed to a
 		non-existing remote filename.
 		Then the file is copied to the remote server and a validation step is run
-		in order to check if the file has been copied succesfully.
+		in order to check if the file has been copied successfully.
 
 		@param	destination_dir, path to destination dir in iRODS
 		@param	origin_file, the dataset to save
 		@param	file_name, the name for the file in Galaxy
 		@param	metadata, the metadata for the file (including provenance)
-		@return True if finished succesfully
+		@return True if finished successfully
 		@throws IOError if the value for the MD5SUM for the original file differs
 		        from the value for the copy in iRODS (error during copy)
 
 		"""
-		print "Copying file " + origin_file + " as " + file_name
+		print("Copying file " + origin_file + " as " + file_name)
 
 		# Step 1. Remove the file if exists
 		path = os.path.join(destination_dir, file_name)
@@ -297,7 +297,7 @@ class IRODSManager:
 			pass
 
 		# Step 2. Create the new file
-		print "Saving file as " + path
+		print("Saving file as " + path)
 
 		obj = self.session.data_objects.create(path)
 
@@ -329,7 +329,7 @@ class IRODSManager:
 		@param	destination_dir, path to destination dir in iRODS
 		@param	file_name, the name for the file in Galaxy
 		@param	metadata, the metadata for the file (including provenance)
-		@return True if finished succesfully
+		@return True if finished successfully
 		@throws DataObjectDoesNotExist if the file does not exists in iRODS
 
 		"""
@@ -342,7 +342,7 @@ class IRODSManager:
 		# Step 2. Clear previous metadata
 		obj.metadata.remove_all()
 
-		print "Setting metadata to file: " + str(metadata)
+		print("Setting metadata to file: " + str(metadata))
 
 		# Step 3. Set metadata
 		for key, value in metadata.iteritems():
