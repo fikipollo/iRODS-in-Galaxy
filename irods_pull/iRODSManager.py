@@ -33,6 +33,7 @@
 
 import sys
 import os
+import subprocess
 import hashlib
 import exceptions
 import json
@@ -184,7 +185,7 @@ class IRODSManager:
 		elif valid == 1:
 			raise CollectionDoesNotExist("File path not valid. The directory " + file_path + " in iRODS is not readable for current user." )
 		elif valid != 2:
-			raise CollectionDoesNotExist("Unable to find the file '" + file_name + "' in directory " + file_path + " in iRODS.")
+			raise CollectionDoesNotExist("Unable to find the file '" + fileName + "' in directory " + file_path + " in iRODS.")
 
 		print "Copying the file from iRODS..."
 
@@ -219,13 +220,14 @@ class IRODSManager:
 		fileParams.close()
 
 		#Step 3. Call to Galaxy's upload tool
-		command = "python " + galaxy_params["GALAXY_ROOT_DIR"] + "/tools/data_source/upload.py"\
-		+ " " + galaxy_params["GALAXY_ROOT_DIR"]\
-		+ " " + galaxy_params["GALAXY_DATATYPES_CONF_FILE"]\
-		+ " " + os.path.abspath(fileParams.name)\
-		+ " " + galaxy_params["job_id"] + ":" + galaxy_params["output_dir"] + ":" + galaxy_params["output_file"]
-
-		os.system(command)
+		command = ["python",  galaxy_params["GALAXY_ROOT_DIR"] + "/tools/data_source/upload.py",
+		galaxy_params["GALAXY_ROOT_DIR"],
+		galaxy_params["GALAXY_DATATYPES_CONF_FILE"],
+		os.path.abspath(fileParams.name),
+		galaxy_params["job_id"] + ":" + galaxy_params["output_dir"] + ":" + galaxy_params["output_file"]]
+		
+		# TODO: Check return code from call to subprocess
+		subprocess.call(command)
 
 		return True
 
