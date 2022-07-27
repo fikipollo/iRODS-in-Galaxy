@@ -1,6 +1,8 @@
 # iRODS-in-Galaxy
 ## Galaxy tools for iRODS integration
 
+based on https://github.com/fikipollo/iRODS-in-Galaxy
+
 This compilation of tools allows you to use your iRODS filesystem in Galaxy.
 
 The included tools are:
